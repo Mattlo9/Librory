@@ -1,4 +1,3 @@
-import { Command } from 'cmdk';
 import {
   BookOpen,
   Clock,
@@ -9,17 +8,29 @@ import {
   Inbox,
   LayoutGrid,
   Library,
-  Search,
   Sparkles,
   Tag,
 } from 'lucide-react';
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+  CommandShortcut,
+} from '@/components/ui/command';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogHeader,
   DialogTitle,
-} from '@/components/ui/Dialog';
+} from '@/components/ui/dialog';
+import { Kbd } from '@/components/ui/kbd';
 import {
   useClearSampleLibrary,
   useSearchItemsFts,
@@ -97,42 +108,46 @@ export function CommandPalette({
         id: 'nav-inbox',
         label: 'Ir a Inbox',
         keywords: 'inbox bandeja entrada',
-        icon: <Inbox className="h-3.5 w-3.5 text-text-muted" />,
+        shortcut: '1',
+        icon: <Inbox className="size-4" />,
         run: () => navigate('inbox'),
       },
       {
         id: 'nav-all',
         label: 'Ir a All Books',
         keywords: 'all books biblioteca todo',
-        icon: <Library className="h-3.5 w-3.5 text-text-muted" />,
+        shortcut: '2',
+        icon: <Library className="size-4" />,
         run: () => navigate('all'),
       },
       {
         id: 'nav-recent',
         label: 'Ir a Recent',
         keywords: 'recent recientes leidos',
-        icon: <Clock className="h-3.5 w-3.5 text-text-muted" />,
+        shortcut: '3',
+        icon: <Clock className="size-4" />,
         run: () => navigate('recent'),
       },
       {
         id: 'nav-highlights',
         label: 'Ir a Highlights',
         keywords: 'highlights subrayados citas notas',
-        icon: <Highlighter className="h-3.5 w-3.5 text-text-muted" />,
+        shortcut: '4',
+        icon: <Highlighter className="size-4" />,
         run: () => navigate('highlights'),
       },
       {
         id: 'new-shelf',
         label: 'Crear nueva estantería',
         keywords: 'nueva estanteria shelf carpeta proyecto',
-        icon: <FolderPlus className="h-3.5 w-3.5 text-text-muted" />,
+        icon: <FolderPlus className="size-4" />,
         run: onCreateShelf,
       },
       {
         id: 'new-tag',
         label: 'Crear nueva etiqueta',
         keywords: 'nueva etiqueta tag',
-        icon: <Tag className="h-3.5 w-3.5 text-text-muted" />,
+        icon: <Tag className="size-4" />,
         run: onCreateTag,
       },
       {
@@ -142,7 +157,7 @@ export function CommandPalette({
             ? 'Cambiar a vista de lista'
             : 'Cambiar a vista de cuadrícula',
         keywords: 'vista grid lista cuadricula',
-        icon: <LayoutGrid className="h-3.5 w-3.5 text-text-muted" />,
+        icon: <LayoutGrid className="size-4" />,
         run: () => setViewMode(viewMode === 'grid' ? 'list' : 'grid'),
       },
       hasSample
@@ -150,7 +165,7 @@ export function CommandPalette({
             id: 'clear-sample',
             label: 'Limpiar colección de ejemplo',
             keywords: 'limpiar ejemplo sample demo borrar',
-            icon: <Sparkles className="h-3.5 w-3.5 text-text-muted" />,
+            icon: <Sparkles className="size-4" />,
             run: () => {
               void clearSample.mutateAsync();
             },
@@ -159,7 +174,7 @@ export function CommandPalette({
             id: 'seed-sample',
             label: 'Cargar colección de ejemplo',
             keywords: 'cargar ejemplo sample demo libros',
-            icon: <Sparkles className="h-3.5 w-3.5 text-text-muted" />,
+            icon: <Sparkles className="size-4" />,
             run: () => {
               void seedSample.mutateAsync();
             },
@@ -206,77 +221,85 @@ export function CommandPalette({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        hideCloseButton
-        className="w-[min(94vw,600px)] overflow-hidden p-0"
+        showCloseButton={false}
+        className="overflow-hidden border-border bg-popover p-0 sm:max-w-[600px]"
       >
-        <DialogTitle className="sr-only">Paleta de comandos</DialogTitle>
-        <DialogDescription className="sr-only">
-          Busca libros por texto completo FTS5, estanterías, etiquetas o acciones.
-        </DialogDescription>
+        <DialogHeader className="sr-only">
+          <DialogTitle>Paleta de comandos</DialogTitle>
+          <DialogDescription>
+            Busca libros por texto completo FTS5, estanterías, etiquetas o acciones.
+          </DialogDescription>
+        </DialogHeader>
 
-        <Command shouldFilter={false} className="flex flex-col bg-bg-elevated">
-          <div className="flex items-center gap-2.5 border-b border-border-subtle px-3.5 py-2.5">
-            <Search className="h-4 w-4 shrink-0 text-text-muted" />
-            <Command.Input
-              autoFocus
-              value={query}
-              onValueChange={setQuery}
-              placeholder="Buscar títulos, autores, notas (FTS5), estanterías o comandos..."
-              className="w-full bg-transparent font-mono text-xs text-text-primary placeholder:text-text-muted focus:outline-none"
-            />
-            <kbd className="shrink-0 rounded border border-border-subtle bg-bg-base px-1.5 py-0.5 font-mono text-[10px] text-text-muted">
+        <Command
+          shouldFilter={false}
+          className="**:data-[slot=command-input-wrapper]:h-12 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]]:px-2 [&_[cmdk-item]]:px-2.5 [&_[cmdk-item]]:py-2"
+        >
+          <div className="relative flex items-center">
+            <div className="w-full">
+              <CommandInput
+                autoFocus
+                value={query}
+                onValueChange={setQuery}
+                placeholder="Buscar títulos, autores, notas (FTS5), estanterías o comandos..."
+              />
+            </div>
+            <Kbd className="pointer-events-none absolute right-3 border border-border bg-secondary px-1.5 font-mono text-[10px]">
               ESC
-            </kbd>
+            </Kbd>
           </div>
 
-          <Command.List className="scrollbar-subtle max-h-[380px] overflow-y-auto p-1.5">
+          <CommandList className="scrollbar-subtle max-h-[380px] p-1">
             {!hasAnyResults && !searchQuery.isFetching ? (
-              <Command.Empty className="py-8 text-center font-mono text-xs text-text-muted">
+              <CommandEmpty className="py-8 text-center text-xs text-muted-foreground">
                 Sin coincidencias para &ldquo;{query}&rdquo;.
-              </Command.Empty>
+              </CommandEmpty>
             ) : null}
 
             {deferredQuery.trim().length > 0 ? (
-              <Command.Group heading="Biblioteca (FTS5)">
+              <CommandGroup heading="Biblioteca (FTS5)">
                 {searchQuery.isFetching && ftsResults.length === 0 ? (
-                  <div className="px-3 py-2 font-mono text-[11px] text-text-muted">
+                  <div className="px-3 py-2 text-xs text-muted-foreground">
                     Buscando en índice FTS5...
                   </div>
                 ) : null}
                 {ftsResults.map(({ item }) => (
-                  <Command.Item
+                  <CommandItem
                     key={item.id}
                     value={`item:${item.id}`}
                     onSelect={() =>
                       runAndClose(() => setSelectedItemId(item.id))
                     }
-                    className="flex cursor-pointer items-center justify-between gap-3 rounded px-3 py-2 text-xs text-text-secondary"
+                    className="cursor-pointer justify-between gap-3"
                   >
                     <div className="flex min-w-0 items-center gap-2.5">
-                      <BookOpen className="h-3.5 w-3.5 shrink-0 text-accent" />
+                      <BookOpen className="size-4 shrink-0 text-accent-brand" />
                       <div className="min-w-0">
-                        <p className="truncate font-mono text-text-primary">
+                        <p className="truncate text-sm font-medium text-foreground">
                           {item.title}
                         </p>
                         {item.author ? (
-                          <p className="truncate text-[11px] italic text-text-secondary">
+                          <p className="truncate font-serif text-xs italic text-muted-foreground">
                             {item.author}
                           </p>
                         ) : null}
                       </div>
                     </div>
-                    <span className="shrink-0 rounded border border-border-subtle bg-bg-base px-1.5 py-0.5 font-mono text-[10px] text-text-muted">
+                    <Badge
+                      variant="secondary"
+                      className="shrink-0 rounded-md font-mono text-[10px] font-normal"
+                    >
                       {ITEM_TYPE_SINGULAR[item.type]}
-                    </span>
-                  </Command.Item>
+                    </Badge>
+                  </CommandItem>
                 ))}
-              </Command.Group>
+              </CommandGroup>
             ) : null}
 
             {matchingShelves.length > 0 ? (
-              <Command.Group heading="Estanterías">
+              <CommandGroup heading="Estanterías">
                 {matchingShelves.map((shelf) => (
-                  <Command.Item
+                  <CommandItem
                     key={shelf.id}
                     value={`shelf:${shelf.id}`}
                     onSelect={() =>
@@ -284,61 +307,70 @@ export function CommandPalette({
                         navigate({ kind: 'shelf', shelfId: shelf.id }),
                       )
                     }
-                    className="flex cursor-pointer items-center justify-between gap-2 rounded px-3 py-1.5 font-mono text-xs text-text-secondary"
+                    className="cursor-pointer justify-between"
                   >
                     <span className="flex min-w-0 items-center gap-2">
-                      <FolderTree className="h-3.5 w-3.5 shrink-0 text-text-muted" />
+                      <FolderTree className="size-4 shrink-0" />
                       <span className="truncate">
-                        {getShelfBreadcrumb(shelf.id, shelfById).join(' › ')}
+                        {getShelfBreadcrumb(shelf.id, shelfById).join(' / ')}
                       </span>
                     </span>
-                    <span className="text-[11px] tabular-nums text-text-muted">
+                    <span className="font-mono text-xs tabular-nums text-muted-foreground">
                       {shelf.item_count}
                     </span>
-                  </Command.Item>
+                  </CommandItem>
                 ))}
-              </Command.Group>
+              </CommandGroup>
             ) : null}
 
             {matchingTags.length > 0 ? (
-              <Command.Group heading="Etiquetas">
-                {matchingTags.map((tag) => (
-                  <Command.Item
-                    key={tag.id}
-                    value={`tag:${tag.id}`}
-                    onSelect={() =>
-                      runAndClose(() => navigate({ kind: 'tag', tagId: tag.id }))
-                    }
-                    className="flex cursor-pointer items-center justify-between gap-2 rounded px-3 py-1.5 font-mono text-xs text-text-secondary"
-                  >
-                    <span className="flex items-center gap-2">
-                      <Hash className="h-3.5 w-3.5 text-text-muted" />
-                      <span>{tag.name}</span>
-                    </span>
-                    <span className="text-[11px] tabular-nums text-text-muted">
-                      {tag.item_count}
-                    </span>
-                  </Command.Item>
-                ))}
-              </Command.Group>
+              <>
+                <CommandSeparator />
+                <CommandGroup heading="Etiquetas">
+                  {matchingTags.map((tag) => (
+                    <CommandItem
+                      key={tag.id}
+                      value={`tag:${tag.id}`}
+                      onSelect={() =>
+                        runAndClose(() => navigate({ kind: 'tag', tagId: tag.id }))
+                      }
+                      className="cursor-pointer justify-between"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Hash className="size-4" />
+                        <span>{tag.name}</span>
+                      </span>
+                      <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                        {tag.item_count}
+                      </span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </>
             ) : null}
 
             {quickActions.length > 0 ? (
-              <Command.Group heading="Acciones">
-                {quickActions.map((action) => (
-                  <Command.Item
-                    key={action.id}
-                    value={action.id}
-                    onSelect={() => runAndClose(action.run)}
-                    className="flex cursor-pointer items-center gap-2 rounded px-3 py-1.5 font-mono text-xs text-text-secondary"
-                  >
-                    {action.icon}
-                    <span>{action.label}</span>
-                  </Command.Item>
-                ))}
-              </Command.Group>
+              <>
+                <CommandSeparator />
+                <CommandGroup heading="Acciones">
+                  {quickActions.map((action) => (
+                    <CommandItem
+                      key={action.id}
+                      value={action.id}
+                      onSelect={() => runAndClose(action.run)}
+                      className="cursor-pointer"
+                    >
+                      {action.icon}
+                      <span>{action.label}</span>
+                      {'shortcut' in action && action.shortcut ? (
+                        <CommandShortcut>{action.shortcut}</CommandShortcut>
+                      ) : null}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </>
             ) : null}
-          </Command.List>
+          </CommandList>
         </Command>
       </DialogContent>
     </Dialog>

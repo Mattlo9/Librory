@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -5,7 +6,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/Dialog';
+} from '@/components/ui/dialog';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -32,32 +33,30 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[min(92vw,420px)]">
+      <DialogContent className="sm:max-w-[420px]">
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
+          <DialogTitle className="tracking-tight">{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <DialogFooter className="mt-2">
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             disabled={isPending}
             onClick={() => onOpenChange(false)}
-            className="rounded border border-border-subtle bg-bg-base px-3 py-1.5 font-mono text-xs text-text-secondary transition-colors hover:border-border-strong hover:text-text-primary disabled:opacity-50"
           >
             {cancelLabel}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant={destructive ? 'destructive' : 'default'}
+            size="sm"
             disabled={isPending}
             onClick={() => void onConfirm()}
-            className={
-              destructive
-                ? 'rounded border border-status-error/50 bg-status-error/15 px-3 py-1.5 font-mono text-xs text-status-error transition-colors hover:bg-status-error/25 disabled:opacity-50'
-                : 'rounded border border-accent/50 bg-accent/15 px-3 py-1.5 font-mono text-xs text-accent transition-colors hover:bg-accent/25 disabled:opacity-50'
-            }
           >
             {isPending ? 'Procesando...' : confirmLabel}
-          </button>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -6,7 +7,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/Dialog';
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import {
   useCreateShelf,
   useUpdateShelf,
@@ -92,18 +94,18 @@ function ShelfDialogForm({
       <div className="space-y-1.5">
         <label
           htmlFor="shelf-name"
-          className="block font-mono text-[11px] text-text-secondary"
+          className="block text-xs font-medium text-muted-foreground"
         >
           Nombre
         </label>
-        <input
+        <Input
           id="shelf-name"
           type="text"
           autoFocus
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Ej. Dialogic Studio, Filosofía, Sistemas..."
-          className="w-full rounded border border-border-strong bg-bg-base px-3 py-2 text-xs text-text-primary placeholder:text-text-muted focus:border-accent/70 focus:outline-none"
+          className="h-9 text-sm"
         />
       </div>
 
@@ -111,7 +113,7 @@ function ShelfDialogForm({
         <div className="space-y-1.5">
           <label
             htmlFor="shelf-category"
-            className="block font-mono text-[11px] text-text-secondary"
+            className="block text-xs font-medium text-muted-foreground"
           >
             Categoría
           </label>
@@ -119,7 +121,7 @@ function ShelfDialogForm({
             id="shelf-category"
             value={category}
             onChange={(e) => setCategory(e.target.value as ShelfCategory)}
-            className="w-full rounded border border-border-strong bg-bg-base px-2.5 py-2 text-xs text-text-primary focus:border-accent/70 focus:outline-none"
+            className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             {SHELF_CATEGORIES.map((cat) => (
               <option key={cat} value={cat}>
@@ -132,7 +134,7 @@ function ShelfDialogForm({
         <div className="space-y-1.5">
           <label
             htmlFor="shelf-parent"
-            className="block font-mono text-[11px] text-text-secondary"
+            className="block text-xs font-medium text-muted-foreground"
           >
             Estantería padre
           </label>
@@ -140,12 +142,12 @@ function ShelfDialogForm({
             id="shelf-parent"
             value={parentId}
             onChange={(e) => setParentId(e.target.value)}
-            className="w-full rounded border border-border-strong bg-bg-base px-2.5 py-2 text-xs text-text-primary focus:border-accent/70 focus:outline-none"
+            className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             <option value="">Ninguna (raíz)</option>
             {availableParents.map((shelf) => (
               <option key={shelf.id} value={shelf.id}>
-                {getShelfBreadcrumb(shelf.id, shelfById).join(' › ')}
+                {getShelfBreadcrumb(shelf.id, shelfById).join(' / ')}
               </option>
             ))}
           </select>
@@ -153,28 +155,25 @@ function ShelfDialogForm({
       </div>
 
       {errorMsg ? (
-        <p className="font-mono text-[11px] text-status-error">{errorMsg}</p>
+        <p className="text-xs text-destructive">{errorMsg}</p>
       ) : null}
 
-      <DialogFooter>
-        <button
+      <DialogFooter className="pt-2">
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           onClick={() => onOpenChange(false)}
-          className="rounded border border-border-subtle bg-bg-base px-3 py-1.5 font-mono text-xs text-text-secondary transition-colors hover:border-border-strong hover:text-text-primary"
         >
           Cancelar
-        </button>
-        <button
-          type="submit"
-          disabled={isPending}
-          className="rounded border border-accent/50 bg-accent/15 px-3.5 py-1.5 font-mono text-xs text-accent transition-colors hover:bg-accent/25 disabled:opacity-50"
-        >
+        </Button>
+        <Button type="submit" size="sm" disabled={isPending}>
           {isPending
             ? 'Guardando...'
             : isEditing
               ? 'Guardar cambios'
               : 'Crear estantería'}
-        </button>
+        </Button>
       </DialogFooter>
     </form>
   );
@@ -189,9 +188,9 @@ export function ShelfDialog({
 }: ShelfDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[min(92vw,460px)]">
+      <DialogContent className="sm:max-w-[460px]">
         <DialogHeader>
-          <DialogTitle>
+          <DialogTitle className="tracking-tight">
             {editingShelf ? 'Editar estantería' : 'Nueva estantería'}
           </DialogTitle>
           <DialogDescription>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { cn } from '@/lib/cn';
-import { TypographicCover } from '@/components/ui/TypographicCover';
+import { TypographicCover } from '@/components/ui/typographic-cover';
+import { cn } from '@/lib/utils';
 import type { FileFormat, ItemType } from '@/types/domain';
 
 interface CoverImageProps {
@@ -42,7 +42,7 @@ export function CoverImage({
   return (
     <div
       className={cn(
-        'relative w-full overflow-hidden rounded-[3px]',
+        'relative w-full overflow-hidden rounded-md shadow-[0_14px_30px_-12px_rgba(0,0,0,0.8)] ring-1 ring-white/[0.08]',
         TYPE_ASPECT_CLASS[type],
         className,
       )}
@@ -54,7 +54,7 @@ export function CoverImage({
           loading="lazy"
           decoding="async"
           onError={() => setFailedUrl(assetUrl)}
-          className="h-full w-full object-cover shadow-[0_8px_20px_rgba(0,0,0,0.45)]"
+          className="h-full w-full object-cover"
         />
       ) : (
         <TypographicCover

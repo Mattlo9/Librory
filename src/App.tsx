@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { FolderPlus, Library, Sparkles, Terminal } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { EmptyState } from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
+import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { HighlightsView } from '@/features/highlights/components/HighlightsView';
 import { BookListView } from '@/features/library/components/BookListView';
 import { BookShelfGrid } from '@/features/library/components/BookShelfGrid';
@@ -103,9 +105,9 @@ export function App() {
 
   if (!tauriActive) {
     return (
-      <div className="bg-linen-surface flex h-screen items-center justify-center p-6">
+      <div className="flex h-screen items-center justify-center bg-background p-6">
         <EmptyState
-          icon={<Terminal className="h-5 w-5" />}
+          icon={<Terminal className="size-5" />}
           title="Ejecuta Librory en el runtime de escritorio"
           description="La base de datos SQLite local y el sistema de archivos requieren Tauri v2. Inicia la aplicación con 'bun run tauri dev'."
         />
@@ -118,7 +120,7 @@ export function App() {
     navCounts.all === 0 && activeTypeFilter === 'all';
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-bg-base text-text-primary">
+    <SidebarProvider className="h-screen overflow-hidden">
       <Sidebar
         navCounts={navCounts}
         shelves={shelves}
@@ -145,7 +147,7 @@ export function App() {
         }
       />
 
-      <main className="bg-linen-surface flex min-w-0 flex-1 flex-col overflow-hidden">
+      <SidebarInset className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden bg-background">
         <LibraryHeader
           segments={heading.segments}
           showViewControls={!isHighlightsView}
@@ -163,20 +165,22 @@ export function App() {
           {isHighlightsView ? (
             <HighlightsView onOpenItem={setSelectedItemId} />
           ) : itemsQuery.isLoading ? (
-            <div className="px-6 py-10 font-mono text-xs text-text-muted">
+            <div className="px-6 py-10 text-xs text-muted-foreground">
               Cargando biblioteca...
             </div>
           ) : items.length === 0 ? (
             <div className="px-6 py-16">
               {showEmptyLibraryActions ? (
                 <EmptyState
-                  icon={<Library className="h-5 w-5" />}
+                  icon={<Library className="size-5" />}
                   title="Tu biblioteca local está vacía"
-                  description="En la Fase 3 integraremos la importación de archivos PDF/EPUB desde tu equipo. Mientras tanto, puedes crear tu estructura de estanterías o cargar una colección de ejemplo para explorar la interfaz."
+                  description="En la Fase 3 integraremos la importación de archivos PDF/EPUB desde tu equipo. Mientras tanto, puedes crear tu estructura de estanterías o cargar una colección de ejemplo para explorar el nuevo diseño."
                   actions={
                     <>
-                      <button
+                      <Button
                         type="button"
+                        variant="outline"
+                        size="sm"
                         onClick={() =>
                           setShelfDialogState({
                             open: true,
@@ -184,28 +188,27 @@ export function App() {
                             parentId: null,
                           })
                         }
-                        className="inline-flex items-center gap-1.5 rounded border border-border-strong bg-bg-elevated px-3 py-1.5 font-mono text-xs text-text-primary transition-colors hover:border-accent/60 hover:text-accent"
                       >
-                        <FolderPlus className="h-3.5 w-3.5" />
+                        <FolderPlus className="size-4" />
                         Nueva estantería
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
+                        size="sm"
                         disabled={seedSample.isPending}
                         onClick={() => seedSample.mutate()}
-                        className="inline-flex items-center gap-1.5 rounded border border-accent/50 bg-accent/15 px-3 py-1.5 font-mono text-xs text-accent transition-colors hover:bg-accent/25 disabled:opacity-50"
                       >
-                        <Sparkles className="h-3.5 w-3.5" />
+                        <Sparkles className="size-4" />
                         {seedSample.isPending
                           ? 'Cargando ejemplo...'
                           : 'Cargar colección de ejemplo'}
-                      </button>
+                      </Button>
                     </>
                   }
                 />
               ) : (
                 <EmptyState
-                  icon={<Library className="h-5 w-5" />}
+                  icon={<Library className="size-5" />}
                   title="No hay recursos en esta vista"
                   description={
                     activeTypeFilter !== 'all'
@@ -214,21 +217,23 @@ export function App() {
                   }
                   actions={
                     activeTypeFilter !== 'all' ? (
-                      <button
+                      <Button
                         type="button"
+                        variant="outline"
+                        size="sm"
                         onClick={() => setActiveTypeFilter('all')}
-                        className="rounded border border-border-strong bg-bg-elevated px-3 py-1.5 font-mono text-xs text-text-primary transition-colors hover:border-accent/60 hover:text-accent"
                       >
                         Mostrar todos los tipos
-                      </button>
+                      </Button>
                     ) : (
-                      <button
+                      <Button
                         type="button"
+                        variant="outline"
+                        size="sm"
                         onClick={() => navigate('all')}
-                        className="rounded border border-border-strong bg-bg-elevated px-3 py-1.5 font-mono text-xs text-text-primary transition-colors hover:border-accent/60 hover:text-accent"
                       >
                         Volver a All Books
-                      </button>
+                      </Button>
                     )
                   }
                 />
@@ -255,7 +260,7 @@ export function App() {
             />
           )}
         </div>
-      </main>
+      </SidebarInset>
 
       <ItemInspectorModal
         itemId={selectedItemId}
@@ -297,6 +302,6 @@ export function App() {
           setTagDialogState({ open: true, editingTag: null })
         }
       />
-    </div>
+    </SidebarProvider>
   );
 }

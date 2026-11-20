@@ -1,5 +1,6 @@
 import { memo, useMemo } from 'react';
-import { CoverImage } from '@/components/ui/CoverImage';
+import { Badge } from '@/components/ui/badge';
+import { CoverImage } from '@/components/ui/cover-image';
 import { useAssetUrl } from '@/features/library/hooks/useAssetUrl';
 import { ITEM_STATUS_LABELS, ITEM_TYPE_SINGULAR } from '@/lib/text';
 import type {
@@ -34,7 +35,7 @@ const BookListRow = memo(function BookListRow({
     <button
       type="button"
       onClick={() => onSelect(item.id)}
-      className="group grid w-full grid-cols-[40px_minmax(0,2fr)_minmax(0,1.2fr)_110px_100px_76px] items-center gap-4 border-b border-border-subtle/70 px-3 py-2.5 text-left transition-colors [content-visibility:auto] [contain-intrinsic-size:64px] hover:bg-bg-hover/70 focus-visible:bg-bg-hover/70 focus-visible:outline-none"
+      className="group grid w-full grid-cols-[40px_minmax(0,2fr)_minmax(0,1.3fr)_120px_100px_84px] items-center gap-4 rounded-lg px-3 py-2.5 text-left transition-colors [content-visibility:auto] [contain-intrinsic-size:64px] hover:bg-secondary/70 focus-visible:bg-secondary/70 focus-visible:outline-none"
     >
       <div className="w-10 shrink-0">
         <CoverImage
@@ -49,42 +50,44 @@ const BookListRow = memo(function BookListRow({
       </div>
 
       <div className="min-w-0">
-        <p className="truncate font-mono text-xs text-text-primary transition-colors group-hover:text-accent">
+        <p className="truncate font-sans text-[13px] font-medium tracking-tight text-foreground transition-colors group-hover:text-accent-brand">
           {item.title}
         </p>
-        <p className="mt-0.5 truncate text-[11px] italic text-text-secondary">
+        <p className="mt-0.5 truncate font-serif text-[12px] italic text-muted-foreground">
           {item.author || 'Sin autor'}
         </p>
       </div>
 
       <div className="flex min-w-0 flex-wrap gap-1">
         {shelfNames.slice(0, 2).map((name) => (
-          <span
+          <Badge
             key={name}
-            className="max-w-[130px] truncate rounded border border-border-subtle bg-bg-elevated px-1.5 py-0.5 font-mono text-[10px] text-text-secondary"
+            variant="secondary"
+            className="max-w-[130px] truncate rounded-md px-1.5 py-0.5 text-[10.5px] font-normal text-secondary-foreground/90"
           >
             {name}
-          </span>
+          </Badge>
         ))}
         {tagNames.slice(0, 2).map((name) => (
-          <span
+          <Badge
             key={name}
-            className="max-w-[100px] truncate rounded border border-border-subtle/80 px-1.5 py-0.5 font-mono text-[10px] text-text-muted"
+            variant="outline"
+            className="max-w-[100px] truncate rounded-md px-1.5 py-0.5 font-mono text-[10px] font-normal text-muted-foreground"
           >
             #{name}
-          </span>
+          </Badge>
         ))}
       </div>
 
-      <span className="truncate font-mono text-[11px] text-text-secondary">
+      <span className="truncate text-xs text-muted-foreground">
         {ITEM_TYPE_SINGULAR[item.type]}
       </span>
 
-      <span className="truncate font-mono text-[11px] text-text-muted">
+      <span className="truncate text-xs text-muted-foreground">
         {ITEM_STATUS_LABELS[item.status]}
       </span>
 
-      <span className="text-right font-mono text-[10.5px] uppercase text-text-muted">
+      <span className="text-right font-mono text-[11px] uppercase tabular-nums text-muted-foreground">
         {item.file_format}
         {item.page_count > 0 ? ` · ${item.page_count}p` : ''}
       </span>
@@ -109,16 +112,16 @@ export function BookListView({
 
   return (
     <div className="px-6 py-4">
-      <div className="grid grid-cols-[40px_minmax(0,2fr)_minmax(0,1.2fr)_110px_100px_76px] gap-4 border-b border-border-strong px-3 pb-2 font-mono text-[10px] uppercase tracking-wider text-text-muted">
+      <div className="mb-1 grid grid-cols-[40px_minmax(0,2fr)_minmax(0,1.3fr)_120px_100px_84px] gap-4 border-b border-border px-3 pb-2 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
         <span />
-        <span>Título / Autor</span>
+        <span>Título y autor</span>
         <span>Estanterías y etiquetas</span>
         <span>Tipo</span>
         <span>Estado</span>
         <span className="text-right">Formato</span>
       </div>
 
-      <div>
+      <div className="divide-y divide-border/50">
         {items.map((item) => {
           const shelfNames = item.shelf_ids
             .map((id) => shelfNameById.get(id))
