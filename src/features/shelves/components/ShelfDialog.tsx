@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -50,12 +50,19 @@ function ShelfDialogForm({
   const isEditing = Boolean(editingShelf);
   const isPending = createShelf.isPending || updateShelf.isPending;
 
-  const blockedIds = editingShelf
-    ? new Set(collectDescendantShelfIds(shelves, editingShelf.id))
-    : new Set<string>();
+  const availableParentOptions = useMemo(() => {
+    const blockedIds = editingShelf
+      ? new Set(collectDescendantShelfIds(shelves, editingShelf.id))
+      : new Set<string>();
+    const shelfById = new Map(shelves.map((shelf) => [shelf.id, shelf]));
 
-  const shelfById = new Map(shelves.map((shelf) => [shelf.id, shelf]));
-  const availableParents = shelves.filter((shelf) => !blockedIds.has(shelf.id));
+    return shelves
+      .filter((shelf) => !blockedIds.has(shelf.id))
+      .map((shelf) => ({
+        id: shelf.id,
+        label: getShelfBreadcrumb(shelf.id, shelfById).join(' / '),
+      }));
+  }, [shelves, editingShelf]);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -102,8 +109,13 @@ function ShelfDialogForm({
           id="shelf-name"
           type="text"
           autoFocus
+          aria-invalid={Boolean(errorMsg)}
+          aria-describedby={errorMsg ? 'shelf-form-error' : undefined}
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            setName(e.target.value);
+            if (errorMsg) setErrorMsg(null);
+          }}
           placeholder="Ej. Dialogic Studio, Filosofía, Sistemas..."
           className="h-9 text-sm"
         />
@@ -145,9 +157,9 @@ function ShelfDialogForm({
             className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             <option value="">Ninguna (raíz)</option>
-            {availableParents.map((shelf) => (
-              <option key={shelf.id} value={shelf.id}>
-                {getShelfBreadcrumb(shelf.id, shelfById).join(' / ')}
+            {availableParentOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
               </option>
             ))}
           </select>
@@ -155,7 +167,9 @@ function ShelfDialogForm({
       </div>
 
       {errorMsg ? (
-        <p className="text-xs text-destructive">{errorMsg}</p>
+        <p id="shelf-form-error" role="alert" className="text-xs text-destructive">
+          {errorMsg}
+        </p>
       ) : null}
 
       <DialogFooter className="pt-2">

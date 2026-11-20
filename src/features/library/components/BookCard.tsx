@@ -5,27 +5,28 @@ import type { LibraryItemWithRelations } from '@/types/domain';
 
 interface BookCardProps {
   item: LibraryItemWithRelations;
-  coverWidth: number;
   onSelect: (id: string) => void;
 }
 
+const COVER_BOX_STYLE = {
+  height: 'calc(var(--cover-w, 158px) * 1.44)',
+} as const;
+
 export const BookCard = memo(function BookCard({
   item,
-  coverWidth,
   onSelect,
 }: BookCardProps) {
   const assetUrl = useAssetUrl(item.cover_path);
-  const coverBoxHeight = Math.round(coverWidth * 1.44);
 
   return (
     <button
       type="button"
       onClick={() => onSelect(item.id)}
-      className="group flex w-full flex-col text-left focus-visible:outline-none"
+      className="group flex w-full flex-col rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
       <div
         className="flex w-full items-end justify-center pb-2"
-        style={{ height: coverBoxHeight }}
+        style={COVER_BOX_STYLE}
       >
         <div className="w-full transition-transform duration-200 ease-out group-hover:-translate-y-1 group-focus-visible:-translate-y-1">
           <CoverImage
@@ -35,7 +36,6 @@ export const BookCard = memo(function BookCard({
             type={item.type}
             fileFormat={item.file_format}
             assetUrl={assetUrl}
-            width={coverWidth}
             className="transition-shadow duration-200 group-hover:ring-accent-brand/45 group-focus-visible:ring-accent-brand/60"
           />
         </div>

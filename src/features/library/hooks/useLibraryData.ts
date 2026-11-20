@@ -1,24 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import {
   createItem,
   deleteItem,
   getItemCountsByType,
   getItemWithRelationsById,
   getNavigationCounts,
+  hasSampleItems,
   listItemsWithRelations,
   searchItemsFts,
   updateItem,
 } from '@/services/bookRepository';
 import { isTauriRuntime } from '@/services/db';
+import { ensureStorageDirectories } from '@/services/fileService';
 import {
   deleteHighlight,
   listHighlightsWithItems,
 } from '@/services/highlightRepository';
-import {
-  clearSampleLibrary,
-  hasSampleItems,
-  seedSampleLibrary,
-} from '@/services/seedService';
 import { collectDescendantShelfIds } from '@/lib/shelfTree';
 import { getNavigationSectionKey } from '@/store/uiStore';
 import type {
@@ -33,18 +31,37 @@ import type {
 
 export const libraryKeys = {
   all: ['library'] as const,
+  storageDirs: ['app', 'storage-dirs'] as const,
   navCounts: ['library', 'nav-counts'] as const,
+  typeCountsRoot: ['library', 'type-counts'] as const,
   typeCounts: (sectionKey: string) =>
     ['library', 'type-counts', sectionKey] as const,
+  itemsRoot: ['library', 'items'] as const,
   items: (sectionKey: string, typeFilter: string, sortBy: string) =>
     ['library', 'items', sectionKey, typeFilter, sortBy] as const,
+  itemDetailRoot: ['library', 'item'] as const,
   itemDetail: (id: string) => ['library', 'item', id] as const,
+  searchFtsRoot: ['library', 'search-fts'] as const,
   searchFts: (query: string) => ['library', 'search-fts', query] as const,
   shelves: ['library', 'shelves'] as const,
   tags: ['library', 'tags'] as const,
   highlights: ['library', 'highlights'] as const,
   hasSample: ['library', 'has-sample'] as const,
 };
+
+export function useIsTauriRuntime(): boolean {
+  return isTauriRuntime();
+}
+
+export function useEnsureStorageDirectories() {
+  const tauriActive = isTauriRuntime();
+  return useQuery({
+    queryKey: libraryKeys.storageDirs,
+    queryFn: ensureStorageDirectories,
+    enabled: tauriActive,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+}
 
 export function buildSectionFilter(
   section: NavigationSection,
@@ -87,8 +104,11 @@ export function useTypeCounts(
 ) {
   const tauriActive = isTauriRuntime();
   const sectionKey = getNavigationSectionKey(section);
-  const { type: _ignoredType, sortBy: _ignoredSort, ...baseFilter } =
-    buildSectionFilter(section, shelves, 'all', 'created_desc');
+  const baseFilter = useMemo(() => {
+    const { type: _ignoredType, sortBy: _ignoredSort, ...rest } =
+      buildSectionFilter(section, shelves, 'all', 'created_desc');
+    return rest;
+  }, [section, shelves]);
 
   return useQuery({
     queryKey: [...libraryKeys.typeCounts(sectionKey), baseFilter.shelfIds ?? []],
@@ -105,7 +125,10 @@ export function useLibraryItems(
 ) {
   const tauriActive = isTauriRuntime();
   const sectionKey = getNavigationSectionKey(section);
-  const filter = buildSectionFilter(section, shelves, typeFilter, sortBy);
+  const filter = useMemo(
+    () => buildSectionFilter(section, shelves, typeFilter, sortBy),
+    [section, shelves, typeFilter, sortBy],
+  );
 
   return useQuery({
     queryKey: [
@@ -170,8 +193,17 @@ export function useUpdateItem() {
   return useMutation({
     mutationFn: ({ id, patch }: { id: string; patch: UpdateItemInput }) =>
       updateItem(id, patch),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: libraryKeys.all });
+    onSuccess: (_data, variables) => {
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: libraryKeys.itemsRoot }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.typeCountsRoot }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.navCounts }),
+        queryClient.invalidateQueries({
+          queryKey: libraryKeys.itemDetail(variables.id),
+        }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.searchFtsRoot }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.highlights }),
+      ]);
     },
   });
 }
@@ -191,7 +223,10 @@ export function useDeleteHighlight() {
   return useMutation({
     mutationFn: (id: string) => deleteHighlight(id),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: libraryKeys.all });
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: libraryKeys.highlights }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.navCounts }),
+      ]);
     },
   });
 }
@@ -199,7 +234,10 @@ export function useDeleteHighlight() {
 export function useSeedSampleLibrary() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: seedSampleLibrary,
+    mutationFn: async () => {
+      const { seedSampleLibrary } = await import('@/services/seedService');
+      return seedSampleLibrary();
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: libraryKeys.all });
     },
@@ -209,7 +247,10 @@ export function useSeedSampleLibrary() {
 export function useClearSampleLibrary() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: clearSampleLibrary,
+    mutationFn: async () => {
+      const { clearSampleLibrary } = await import('@/services/seedService');
+      return clearSampleLibrary();
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: libraryKeys.all });
     },

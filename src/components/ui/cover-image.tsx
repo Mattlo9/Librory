@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { TypographicCover } from '@/components/ui/typographic-cover';
 import { cn } from '@/lib/utils';
 import type { FileFormat, ItemType } from '@/types/domain';
@@ -10,7 +10,7 @@ interface CoverImageProps {
   type: ItemType;
   fileFormat: FileFormat;
   assetUrl: string | null;
-  width: number;
+  compact?: boolean;
   className?: string;
 }
 
@@ -25,15 +25,16 @@ const TYPE_ASPECT_CLASS: Record<ItemType, string> = {
 
 /**
  * Pure cover presenter: uses local asset:// URL when available, otherwise TypographicCover.
+ * Marked as a CSS inline-size container so TypographicCover scales smoothly via cqw without JS re-renders.
  */
-export function CoverImage({
+export const CoverImage = memo(function CoverImage({
   id,
   title,
   author,
   type,
   fileFormat,
   assetUrl,
-  width,
+  compact = false,
   className,
 }: CoverImageProps) {
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
@@ -42,7 +43,7 @@ export function CoverImage({
   return (
     <div
       className={cn(
-        'relative w-full overflow-hidden rounded-md shadow-[0_14px_30px_-12px_rgba(0,0,0,0.8)] ring-1 ring-white/[0.08]',
+        '@container relative w-full overflow-hidden rounded-md shadow-[0_14px_30px_-12px_rgba(0,0,0,0.8)] ring-1 ring-white/[0.08]',
         TYPE_ASPECT_CLASS[type],
         className,
       )}
@@ -63,9 +64,9 @@ export function CoverImage({
           author={author}
           type={type}
           fileFormat={fileFormat}
-          width={width}
+          compact={compact}
         />
       )}
     </div>
   );
-}
+});

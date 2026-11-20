@@ -30,6 +30,8 @@ export function getNavigationSectionKey(section: NavigationSection): string {
   return section.kind === 'shelf' ? `shelf:${section.shelfId}` : `tag:${section.tagId}`;
 }
 
+const MAX_HISTORY_ENTRIES = 50;
+
 interface UiState {
   activeSection: NavigationSection;
   history: NavigationSection[];
@@ -39,6 +41,7 @@ interface UiState {
   viewMode: ViewMode;
   sortBy: SortOption;
   groupByShelf: boolean;
+  sidebarOpen: boolean;
   expandedShelfIds: Record<string, boolean>;
   tagsExpanded: boolean;
   commandPaletteOpen: boolean;
@@ -52,6 +55,7 @@ interface UiState {
   setViewMode: (mode: ViewMode) => void;
   setSortBy: (sort: SortOption) => void;
   setGroupByShelf: (grouped: boolean) => void;
+  setSidebarOpen: (open: boolean) => void;
   toggleShelfExpanded: (id: string) => void;
   setShelfExpanded: (id: string, open: boolean) => void;
   toggleTagsExpanded: () => void;
@@ -70,6 +74,7 @@ export const useUiStore = create<UiState>()(
       viewMode: 'grid',
       sortBy: 'created_desc',
       groupByShelf: true,
+      sidebarOpen: true,
       expandedShelfIds: {},
       tagsExpanded: true,
       commandPaletteOpen: false,
@@ -82,10 +87,14 @@ export const useUiStore = create<UiState>()(
         }
         const nextHistory = history.slice(0, historyIndex + 1);
         nextHistory.push(section);
+        const boundedHistory =
+          nextHistory.length > MAX_HISTORY_ENTRIES
+            ? nextHistory.slice(nextHistory.length - MAX_HISTORY_ENTRIES)
+            : nextHistory;
         set({
           activeSection: section,
-          history: nextHistory,
-          historyIndex: nextHistory.length - 1,
+          history: boundedHistory,
+          historyIndex: boundedHistory.length - 1,
         });
       },
 
@@ -124,6 +133,8 @@ export const useUiStore = create<UiState>()(
 
       setGroupByShelf: (groupByShelf) => set({ groupByShelf }),
 
+      setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
+
       toggleShelfExpanded: (id) =>
         set((state) => ({
           expandedShelfIds: {
@@ -149,11 +160,13 @@ export const useUiStore = create<UiState>()(
     }),
     {
       name: 'librory-ui-v1',
+      version: 1,
       partialize: (state) => ({
         coverSize: state.coverSize,
         viewMode: state.viewMode,
         sortBy: state.sortBy,
         groupByShelf: state.groupByShelf,
+        sidebarOpen: state.sidebarOpen,
         expandedShelfIds: state.expandedShelfIds,
         tagsExpanded: state.tagsExpanded,
       }),

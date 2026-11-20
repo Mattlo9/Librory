@@ -1,5 +1,5 @@
 import { Check, Hash, Plus, Trash2 } from 'lucide-react';
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -14,6 +14,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { useAssetUrl } from '@/features/library/hooks/useAssetUrl';
 import {
@@ -46,6 +47,22 @@ interface ItemInspectorModalProps {
   onClose: () => void;
 }
 
+const INSPECTOR_SKELETON = (
+  <div role="status" aria-label="Cargando ficha" className="space-y-4 px-5 pb-6">
+    <div className="flex gap-4 rounded-xl border border-border bg-secondary/40 p-3.5">
+      <Skeleton className="h-28 w-20 shrink-0 rounded-md" />
+      <div className="flex-1 space-y-2 py-1">
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-5 w-4/5" />
+        <Skeleton className="h-3 w-2/3" />
+      </div>
+    </div>
+    <Skeleton className="h-9 w-full" />
+    <Skeleton className="h-9 w-full" />
+    <Skeleton className="h-24 w-full" />
+  </div>
+);
+
 function InspectorBody({
   item,
   shelves,
@@ -70,13 +87,26 @@ function InspectorBody({
   const [status, setStatus] = useState<ItemStatus>(item.status);
   const [notes, setNotes] = useState(item.notes);
   const [newTagName, setNewTagName] = useState('');
+  const [tagError, setTagError] = useState<string | null>(null);
   const [savedNotice, setSavedNotice] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const savedTimerRef = useRef<number | null>(null);
 
-  const shelfById = useMemo(
-    () => new Map(shelves.map((shelf) => [shelf.id, shelf])),
-    [shelves],
-  );
+  useEffect(() => {
+    return () => {
+      if (savedTimerRef.current !== null) {
+        window.clearTimeout(savedTimerRef.current);
+      }
+    };
+  }, []);
+
+  const shelfOptions = useMemo(() => {
+    const shelfById = new Map(shelves.map((shelf) => [shelf.id, shelf]));
+    return shelves.map((shelf) => ({
+      shelf,
+      label: getShelfBreadcrumb(shelf.id, shelfById).join(' / '),
+    }));
+  }, [shelves]);
 
   const assignedShelfIds = useMemo(() => new Set(item.shelf_ids), [item.shelf_ids]);
   const assignedTagIds = useMemo(() => new Set(item.tag_ids), [item.tag_ids]);
@@ -104,19 +134,35 @@ function InspectorBody({
       },
     });
     setSavedNotice(true);
-    setTimeout(() => setSavedNotice(false), 1800);
+    if (savedTimerRef.current !== null) {
+      window.clearTimeout(savedTimerRef.current);
+    }
+    savedTimerRef.current = window.setTimeout(() => {
+      setSavedNotice(false);
+      savedTimerRef.current = null;
+    }, 1800);
   }
 
   async function handleQuickCreateTag() {
     const trimmed = newTagName.trim();
     if (!trimmed) return;
-    const created = await createTag.mutateAsync({ name: trimmed });
-    await toggleTag.mutateAsync({
-      itemId: item.id,
-      tagId: created.id,
-      assigned: false,
-    });
-    setNewTagName('');
+    setTagError(null);
+    try {
+      const created = await createTag.mutateAsync({ name: trimmed });
+      await toggleTag.mutateAsync({
+        itemId: item.id,
+        tagId: created.id,
+        assigned: false,
+      });
+      setNewTagName('');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setTagError(
+        message.toLowerCase().includes('unique')
+          ? `Ya existe una etiqueta llamada "${trimmed}".`
+          : message,
+      );
+    }
   }
 
   return (
@@ -130,7 +176,6 @@ function InspectorBody({
             type={type}
             fileFormat={item.file_format}
             assetUrl={assetUrl}
-            width={80}
           />
         </div>
 
@@ -269,7 +314,11 @@ function InspectorBody({
 
           <div className="flex items-center gap-2.5">
             {savedNotice ? (
-              <span className="font-mono text-xs text-emerald-400">
+              <span
+                role="status"
+                aria-live="polite"
+                className="font-mono text-xs text-emerald-400"
+              >
                 Guardado
               </span>
             ) : null}
@@ -293,19 +342,19 @@ function InspectorBody({
           </h3>
         </div>
 
-        {shelves.length === 0 ? (
+        {shelfOptions.length === 0 ? (
           <p className="text-xs text-muted-foreground">
             Crea una estantería en la barra lateral para organizar este recurso.
           </p>
         ) : (
           <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-            {shelves.map((shelf) => {
+            {shelfOptions.map(({ shelf, label }) => {
               const checked = assignedShelfIds.has(shelf.id);
-              const label = getShelfBreadcrumb(shelf.id, shelfById).join(' / ');
               return (
                 <button
                   key={shelf.id}
                   type="button"
+                  aria-pressed={checked}
                   onClick={() =>
                     toggleShelf.mutate({
                       itemId: item.id,
@@ -314,13 +363,14 @@ function InspectorBody({
                     })
                   }
                   className={cn(
-                    'flex items-center gap-2 rounded-md border px-2.5 py-2 text-left text-xs transition-colors',
+                    'flex items-center gap-2 rounded-md border px-2.5 py-2 text-left text-xs outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
                     checked
                       ? 'border-accent-brand/50 bg-accent-brand/10 text-foreground'
                       : 'border-border bg-secondary/40 text-muted-foreground hover:bg-secondary hover:text-foreground',
                   )}
                 >
                   <span
+                    aria-hidden="true"
                     className={cn(
                       'flex size-3.5 shrink-0 items-center justify-center rounded-sm border',
                       checked
@@ -348,8 +398,14 @@ function InspectorBody({
           <div className="flex items-center gap-1.5">
             <Input
               type="text"
+              aria-label="Nombre de nueva etiqueta"
+              aria-invalid={Boolean(tagError)}
+              aria-describedby={tagError ? 'inspector-tag-error' : undefined}
               value={newTagName}
-              onChange={(e) => setNewTagName(e.target.value)}
+              onChange={(e) => {
+                setNewTagName(e.target.value);
+                if (tagError) setTagError(null);
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
@@ -372,6 +428,12 @@ function InspectorBody({
           </div>
         </div>
 
+        {tagError ? (
+          <p id="inspector-tag-error" role="alert" className="text-xs text-destructive">
+            {tagError}
+          </p>
+        ) : null}
+
         <div className="flex flex-wrap gap-1.5">
           {tags.map((tag) => {
             const active = assignedTagIds.has(tag.id);
@@ -379,6 +441,7 @@ function InspectorBody({
               <button
                 key={tag.id}
                 type="button"
+                aria-pressed={active}
                 onClick={() =>
                   toggleTag.mutate({
                     itemId: item.id,
@@ -387,7 +450,7 @@ function InspectorBody({
                   })
                 }
                 className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors',
+                  'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
                   active
                     ? 'border-accent-brand/55 bg-accent-brand/15 text-foreground'
                     : 'border-border bg-secondary/40 text-muted-foreground hover:bg-secondary hover:text-foreground',
@@ -396,6 +459,7 @@ function InspectorBody({
                 <Hash className="size-3 text-muted-foreground" />
                 {tag.color ? (
                   <span
+                    aria-hidden="true"
                     className="size-1.5 rounded-full"
                     style={{ backgroundColor: tag.color }}
                   />
@@ -461,9 +525,7 @@ export function ItemInspectorModal({
           </SheetHeader>
 
           {detailQuery.isLoading ? (
-            <p className="px-5 py-10 text-center text-xs text-muted-foreground">
-              Cargando ficha...
-            </p>
+            INSPECTOR_SKELETON
           ) : detailQuery.data ? (
             <InspectorBody
               key={detailQuery.data.id}

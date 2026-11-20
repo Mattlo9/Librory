@@ -11,7 +11,7 @@ import {
   Sparkles,
   Tag,
 } from 'lucide-react';
-import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useMemo, useState, type ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
 import {
   Command,
@@ -49,6 +49,26 @@ interface CommandPaletteProps {
   onCreateTag: () => void;
 }
 
+interface QuickActionItem {
+  id: string;
+  label: string;
+  searchable: string;
+  shortcut?: string;
+  icon: ReactNode;
+  run: () => void;
+}
+
+const ACTION_ICONS = {
+  inbox: <Inbox className="size-4" />,
+  all: <Library className="size-4" />,
+  recent: <Clock className="size-4" />,
+  highlights: <Highlighter className="size-4" />,
+  newShelf: <FolderPlus className="size-4" />,
+  newTag: <Tag className="size-4" />,
+  toggleView: <LayoutGrid className="size-4" />,
+  sample: <Sparkles className="size-4" />,
+} as const;
+
 export function CommandPalette({
   shelves,
   tags,
@@ -67,33 +87,29 @@ export function CommandPalette({
   const deferredQuery = useDeferredValue(query);
 
   const searchQuery = useSearchItemsFts(deferredQuery, open);
-  const seedSample = useSeedSampleLibrary();
-  const clearSample = useClearSampleLibrary();
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() === 'k' && (event.ctrlKey || event.metaKey)) {
-        event.preventDefault();
-        setOpen(!useUiStore.getState().commandPaletteOpen);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [setOpen]);
+  const { mutateAsync: seedSampleAsync } = useSeedSampleLibrary();
+  const { mutateAsync: clearSampleAsync } = useClearSampleLibrary();
 
   const normalizedQuery = normalizeForSearch(deferredQuery);
-  const shelfById = useMemo(
-    () => new Map(shelves.map((shelf) => [shelf.id, shelf])),
-    [shelves],
-  );
+
+  const indexedShelves = useMemo(() => {
+    const shelfById = new Map(shelves.map((shelf) => [shelf.id, shelf]));
+    return shelves.map((shelf) => {
+      const breadcrumb = getShelfBreadcrumb(shelf.id, shelfById).join(' / ');
+      return {
+        shelf,
+        breadcrumb,
+        normalizedBreadcrumb: normalizeForSearch(breadcrumb),
+      };
+    });
+  }, [shelves]);
 
   const matchingShelves = useMemo(() => {
-    if (!normalizedQuery) return shelves.slice(0, 6);
-    return shelves.filter((shelf) => {
-      const fullPath = getShelfBreadcrumb(shelf.id, shelfById).join(' ');
-      return normalizeForSearch(fullPath).includes(normalizedQuery);
-    });
-  }, [normalizedQuery, shelfById, shelves]);
+    if (!normalizedQuery) return indexedShelves.slice(0, 6);
+    return indexedShelves.filter((entry) =>
+      entry.normalizedBreadcrumb.includes(normalizedQuery),
+    );
+  }, [indexedShelves, normalizedQuery]);
 
   const matchingTags = useMemo(() => {
     if (!normalizedQuery) return tags.slice(0, 6);
@@ -102,52 +118,59 @@ export function CommandPalette({
     );
   }, [normalizedQuery, tags]);
 
-  const quickActions = useMemo(() => {
-    const actions = [
+  const allQuickActions = useMemo<QuickActionItem[]>(() => {
+    const items: Array<{
+      id: string;
+      label: string;
+      keywords: string;
+      shortcut?: string;
+      icon: ReactNode;
+      run: () => void;
+    }> = [
       {
         id: 'nav-inbox',
         label: 'Ir a Inbox',
         keywords: 'inbox bandeja entrada',
-        shortcut: '1',
-        icon: <Inbox className="size-4" />,
+        shortcut: 'Alt+1',
+        icon: ACTION_ICONS.inbox,
         run: () => navigate('inbox'),
       },
       {
         id: 'nav-all',
         label: 'Ir a All Books',
         keywords: 'all books biblioteca todo',
-        shortcut: '2',
-        icon: <Library className="size-4" />,
+        shortcut: 'Alt+2',
+        icon: ACTION_ICONS.all,
         run: () => navigate('all'),
       },
       {
         id: 'nav-recent',
         label: 'Ir a Recent',
         keywords: 'recent recientes leidos',
-        shortcut: '3',
-        icon: <Clock className="size-4" />,
+        shortcut: 'Alt+3',
+        icon: ACTION_ICONS.recent,
         run: () => navigate('recent'),
       },
       {
         id: 'nav-highlights',
         label: 'Ir a Highlights',
         keywords: 'highlights subrayados citas notas',
-        shortcut: '4',
-        icon: <Highlighter className="size-4" />,
+        shortcut: 'Alt+4',
+        icon: ACTION_ICONS.highlights,
         run: () => navigate('highlights'),
       },
       {
         id: 'new-shelf',
         label: 'Crear nueva estantería',
         keywords: 'nueva estanteria shelf carpeta proyecto',
-        icon: <FolderPlus className="size-4" />,
+        icon: ACTION_ICONS.newShelf,
         run: onCreateShelf,
       },
       {
         id: 'new-tag',
         label: 'Crear nueva etiqueta',
         keywords: 'nueva etiqueta tag',
-        icon: <Tag className="size-4" />,
+        icon: ACTION_ICONS.newTag,
         run: onCreateTag,
       },
       {
@@ -157,7 +180,7 @@ export function CommandPalette({
             ? 'Cambiar a vista de lista'
             : 'Cambiar a vista de cuadrícula',
         keywords: 'vista grid lista cuadricula',
-        icon: <LayoutGrid className="size-4" />,
+        icon: ACTION_ICONS.toggleView,
         run: () => setViewMode(viewMode === 'grid' ? 'list' : 'grid'),
       },
       hasSample
@@ -165,39 +188,47 @@ export function CommandPalette({
             id: 'clear-sample',
             label: 'Limpiar colección de ejemplo',
             keywords: 'limpiar ejemplo sample demo borrar',
-            icon: <Sparkles className="size-4" />,
+            icon: ACTION_ICONS.sample,
             run: () => {
-              void clearSample.mutateAsync();
+              void clearSampleAsync();
             },
           }
         : {
             id: 'seed-sample',
             label: 'Cargar colección de ejemplo',
             keywords: 'cargar ejemplo sample demo libros',
-            icon: <Sparkles className="size-4" />,
+            icon: ACTION_ICONS.sample,
             run: () => {
-              void seedSample.mutateAsync();
+              void seedSampleAsync();
             },
           },
     ];
 
-    if (!normalizedQuery) return actions;
-    return actions.filter((action) =>
-      normalizeForSearch(`${action.label} ${action.keywords}`).includes(
-        normalizedQuery,
-      ),
-    );
+    return items.map((item) => ({
+      id: item.id,
+      label: item.label,
+      searchable: normalizeForSearch(`${item.label} ${item.keywords}`),
+      shortcut: item.shortcut,
+      icon: item.icon,
+      run: item.run,
+    }));
   }, [
-    clearSample,
+    clearSampleAsync,
     hasSample,
     navigate,
-    normalizedQuery,
     onCreateShelf,
     onCreateTag,
-    seedSample,
+    seedSampleAsync,
     setViewMode,
     viewMode,
   ]);
+
+  const quickActions = useMemo(() => {
+    if (!normalizedQuery) return allQuickActions;
+    return allQuickActions.filter((action) =>
+      action.searchable.includes(normalizedQuery),
+    );
+  }, [allQuickActions, normalizedQuery]);
 
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen);
@@ -244,7 +275,10 @@ export function CommandPalette({
                 placeholder="Buscar títulos, autores, notas (FTS5), estanterías o comandos..."
               />
             </div>
-            <Kbd className="pointer-events-none absolute right-3 border border-border bg-secondary px-1.5 font-mono text-[10px]">
+            <Kbd
+              aria-hidden="true"
+              className="pointer-events-none absolute right-3 border border-border bg-secondary px-1.5 font-mono text-[10px]"
+            >
               ESC
             </Kbd>
           </div>
@@ -259,7 +293,11 @@ export function CommandPalette({
             {deferredQuery.trim().length > 0 ? (
               <CommandGroup heading="Biblioteca (FTS5)">
                 {searchQuery.isFetching && ftsResults.length === 0 ? (
-                  <div className="px-3 py-2 text-xs text-muted-foreground">
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    className="px-3 py-2 text-xs text-muted-foreground"
+                  >
                     Buscando en índice FTS5...
                   </div>
                 ) : null}
@@ -298,7 +336,7 @@ export function CommandPalette({
 
             {matchingShelves.length > 0 ? (
               <CommandGroup heading="Estanterías">
-                {matchingShelves.map((shelf) => (
+                {matchingShelves.map(({ shelf, breadcrumb }) => (
                   <CommandItem
                     key={shelf.id}
                     value={`shelf:${shelf.id}`}
@@ -311,9 +349,7 @@ export function CommandPalette({
                   >
                     <span className="flex min-w-0 items-center gap-2">
                       <FolderTree className="size-4 shrink-0" />
-                      <span className="truncate">
-                        {getShelfBreadcrumb(shelf.id, shelfById).join(' / ')}
-                      </span>
+                      <span className="truncate">{breadcrumb}</span>
                     </span>
                     <span className="font-mono text-xs tabular-nums text-muted-foreground">
                       {shelf.item_count}
@@ -362,7 +398,7 @@ export function CommandPalette({
                     >
                       {action.icon}
                       <span>{action.label}</span>
-                      {'shortcut' in action && action.shortcut ? (
+                      {action.shortcut ? (
                         <CommandShortcut>{action.shortcut}</CommandShortcut>
                       ) : null}
                     </CommandItem>

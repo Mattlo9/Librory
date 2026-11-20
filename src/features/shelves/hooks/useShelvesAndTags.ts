@@ -47,7 +47,7 @@ export function useCreateShelf() {
   return useMutation({
     mutationFn: (input: CreateShelfInput) => createShelf(input),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: libraryKeys.all });
+      void queryClient.invalidateQueries({ queryKey: libraryKeys.shelves });
     },
   });
 }
@@ -58,7 +58,11 @@ export function useUpdateShelf() {
     mutationFn: ({ id, patch }: { id: string; patch: UpdateShelfInput }) =>
       updateShelf(id, patch),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: libraryKeys.all });
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: libraryKeys.shelves }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.itemsRoot }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.typeCountsRoot }),
+      ]);
     },
   });
 }
@@ -68,7 +72,12 @@ export function useDeleteShelf() {
   return useMutation({
     mutationFn: (id: string) => deleteShelf(id),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: libraryKeys.all });
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: libraryKeys.shelves }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.itemsRoot }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.typeCountsRoot }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.itemDetailRoot }),
+      ]);
     },
   });
 }
@@ -88,8 +97,15 @@ export function useToggleItemShelf() {
       assigned
         ? removeItemFromShelf(itemId, shelfId)
         : assignItemToShelf(itemId, shelfId),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: libraryKeys.all });
+    onSuccess: (_data, variables) => {
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: libraryKeys.shelves }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.itemsRoot }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.typeCountsRoot }),
+        queryClient.invalidateQueries({
+          queryKey: libraryKeys.itemDetail(variables.itemId),
+        }),
+      ]);
     },
   });
 }
@@ -99,7 +115,7 @@ export function useCreateTag() {
   return useMutation({
     mutationFn: (input: CreateTagInput) => createTag(input),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: libraryKeys.all });
+      void queryClient.invalidateQueries({ queryKey: libraryKeys.tags });
     },
   });
 }
@@ -110,7 +126,10 @@ export function useUpdateTag() {
     mutationFn: ({ id, patch }: { id: string; patch: UpdateTagInput }) =>
       updateTag(id, patch),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: libraryKeys.all });
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: libraryKeys.tags }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.itemsRoot }),
+      ]);
     },
   });
 }
@@ -120,7 +139,12 @@ export function useDeleteTag() {
   return useMutation({
     mutationFn: (id: string) => deleteTag(id),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: libraryKeys.all });
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: libraryKeys.tags }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.itemsRoot }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.typeCountsRoot }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.itemDetailRoot }),
+      ]);
     },
   });
 }
@@ -140,8 +164,15 @@ export function useToggleItemTag() {
       assigned
         ? removeTagFromItem(itemId, tagId)
         : assignTagToItem(itemId, tagId),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: libraryKeys.all });
+    onSuccess: (_data, variables) => {
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: libraryKeys.tags }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.itemsRoot }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.typeCountsRoot }),
+        queryClient.invalidateQueries({
+          queryKey: libraryKeys.itemDetail(variables.itemId),
+        }),
+      ]);
     },
   });
 }

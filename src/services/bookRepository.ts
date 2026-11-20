@@ -117,32 +117,68 @@ export async function listItems(filter: ItemFilter = {}): Promise<LibraryItem[]>
   return db.select<LibraryItem[]>(sql, params);
 }
 
+const SQLITE_IN_CHUNK_SIZE = 500;
+
 export async function listItemsWithRelations(
   filter: ItemFilter = {},
 ): Promise<LibraryItemWithRelations[]> {
-  const db = await getDb();
-  const [items, shelfLinks, tagLinks] = await Promise.all([
-    listItems(filter),
-    db.select<Array<{ item_id: string; shelf_id: string }>>(
-      'SELECT item_id, shelf_id FROM item_shelves',
-    ),
-    db.select<Array<{ item_id: string; tag_id: string }>>(
-      'SELECT item_id, tag_id FROM item_tags',
-    ),
-  ]);
-
-  const shelvesByItem = new Map<string, string[]>();
-  for (const link of shelfLinks) {
-    const list = shelvesByItem.get(link.item_id) ?? [];
-    list.push(link.shelf_id);
-    shelvesByItem.set(link.item_id, list);
+  const items = await listItems(filter);
+  if (items.length === 0) {
+    return [];
   }
 
+  const db = await getDb();
+  const itemIds = items.map((item) => item.id);
+
+  const shelvesByItem = new Map<string, string[]>();
   const tagsByItem = new Map<string, string[]>();
-  for (const link of tagLinks) {
-    const list = tagsByItem.get(link.item_id) ?? [];
-    list.push(link.tag_id);
-    tagsByItem.set(link.item_id, list);
+
+  const chunkPromises: Array<
+    Promise<
+      [
+        Array<{ item_id: string; shelf_id: string }>,
+        Array<{ item_id: string; tag_id: string }>,
+      ]
+    >
+  > = [];
+
+  for (let i = 0; i < itemIds.length; i += SQLITE_IN_CHUNK_SIZE) {
+    const chunk = itemIds.slice(i, i + SQLITE_IN_CHUNK_SIZE);
+    const placeholders = chunk.map((_, idx) => `$${idx + 1}`).join(', ');
+    chunkPromises.push(
+      Promise.all([
+        db.select<Array<{ item_id: string; shelf_id: string }>>(
+          `SELECT item_id, shelf_id FROM item_shelves WHERE item_id IN (${placeholders})`,
+          chunk,
+        ),
+        db.select<Array<{ item_id: string; tag_id: string }>>(
+          `SELECT item_id, tag_id FROM item_tags WHERE item_id IN (${placeholders})`,
+          chunk,
+        ),
+      ]),
+    );
+  }
+
+  const chunkResults = await Promise.all(chunkPromises);
+
+  for (const [shelfLinks, tagLinks] of chunkResults) {
+    for (const link of shelfLinks) {
+      let list = shelvesByItem.get(link.item_id);
+      if (!list) {
+        list = [];
+        shelvesByItem.set(link.item_id, list);
+      }
+      list.push(link.shelf_id);
+    }
+
+    for (const link of tagLinks) {
+      let list = tagsByItem.get(link.item_id);
+      if (!list) {
+        list = [];
+        tagsByItem.set(link.item_id, list);
+      }
+      list.push(link.tag_id);
+    }
   }
 
   return items.map((item) => ({
@@ -368,6 +404,14 @@ export async function getNavigationCounts(): Promise<{
     recent: recentRows[0]?.count ?? 0,
     highlights: highlightsRows[0]?.count ?? 0,
   };
+}
+
+export async function hasSampleItems(): Promise<boolean> {
+  const db = await getDb();
+  const rows = await db.select<Array<{ count: number }>>(
+    "SELECT COUNT(*) AS count FROM items WHERE file_path LIKE 'sample/%'",
+  );
+  return (rows[0]?.count ?? 0) > 0;
 }
 
 /**

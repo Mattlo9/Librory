@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   useDeleteHighlight,
   useHighlightsList,
@@ -21,6 +22,17 @@ const HIGHLIGHT_ACCENT: Record<HighlightColor, string> = {
   slate: 'border-l-accent-brand',
 };
 
+const HIGHLIGHTS_LOADING_SKELETON = (
+  <div
+    role="status"
+    aria-label="Cargando subrayados"
+    className="mx-auto max-w-3xl space-y-4 px-6 py-8"
+  >
+    <Skeleton className="h-36 w-full rounded-xl" />
+    <Skeleton className="h-32 w-full rounded-xl" />
+  </div>
+);
+
 export function HighlightsView({ onOpenItem }: HighlightsViewProps) {
   const highlightsQuery = useHighlightsList(true);
   const deleteHighlight = useDeleteHighlight();
@@ -28,11 +40,7 @@ export function HighlightsView({ onOpenItem }: HighlightsViewProps) {
     useState<HighlightWithItem | null>(null);
 
   if (highlightsQuery.isLoading) {
-    return (
-      <div className="px-6 py-10 text-xs text-muted-foreground">
-        Cargando subrayados...
-      </div>
-    );
+    return HIGHLIGHTS_LOADING_SKELETON;
   }
 
   const highlights = highlightsQuery.data ?? [];
@@ -55,7 +63,7 @@ export function HighlightsView({ onOpenItem }: HighlightsViewProps) {
         <article
           key={entry.id}
           className={cn(
-            'rounded-xl border border-border border-l-2 bg-card p-5 transition-colors hover:border-border/80',
+            'rounded-xl border border-border border-l-2 bg-card p-5 transition-colors [content-visibility:auto] [contain-intrinsic-size:auto_180px] hover:border-border/80',
             HIGHLIGHT_ACCENT[entry.color],
           )}
         >
@@ -73,7 +81,7 @@ export function HighlightsView({ onOpenItem }: HighlightsViewProps) {
             <button
               type="button"
               onClick={() => onOpenItem(entry.item_id)}
-              className="truncate text-xs font-medium text-muted-foreground transition-colors hover:text-accent-brand"
+              className="truncate rounded-sm text-xs font-medium text-muted-foreground outline-none transition-colors hover:text-accent-brand focus-visible:text-accent-brand focus-visible:ring-2 focus-visible:ring-ring"
             >
               <span>{entry.item_title}</span>
               {entry.item_author ? (

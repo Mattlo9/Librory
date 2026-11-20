@@ -1,17 +1,11 @@
 import { getDb } from '@/services/db';
-import {
-  buildShelfTree,
-  collectDescendantShelfIds,
-  getShelfBreadcrumb,
-} from '@/lib/shelfTree';
+import { collectDescendantShelfIds } from '@/lib/shelfTree';
 import type {
   CreateShelfInput,
   Shelf,
   ShelfWithCount,
   UpdateShelfInput,
 } from '@/types/domain';
-
-export { buildShelfTree, collectDescendantShelfIds, getShelfBreadcrumb };
 
 export async function listShelvesWithCounts(): Promise<ShelfWithCount[]> {
   const db = await getDb();

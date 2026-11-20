@@ -1,19 +1,21 @@
 import {
   ArrowUpDown,
   BookMarked,
-  Check,
   ChevronLeft,
   ChevronRight,
   LayoutGrid,
   List,
   Search,
 } from 'lucide-react';
+import { memo } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -35,13 +37,15 @@ import type { SortOption, ViewMode } from '@/types/domain';
 interface LibraryHeaderProps {
   segments: string[];
   showViewControls: boolean;
+  onPreloadCommandPalette?: () => void;
 }
 
 const SORT_OPTIONS: SortOption[] = ['created_desc', 'title_asc', 'author_asc'];
 
-export function LibraryHeader({
+export const LibraryHeader = memo(function LibraryHeader({
   segments,
   showViewControls,
+  onPreloadCommandPalette,
 }: LibraryHeaderProps) {
   const historyIndex = useUiStore((s) => s.historyIndex);
   const historyLength = useUiStore((s) => s.history.length);
@@ -59,6 +63,7 @@ export function LibraryHeader({
 
   const canGoBack = historyIndex > 0;
   const canGoForward = historyIndex < historyLength - 1;
+  const sliderDisabled = viewMode !== 'grid';
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border bg-background/90 px-5 backdrop-blur-sm">
@@ -98,7 +103,9 @@ export function LibraryHeader({
               className="flex min-w-0 items-center gap-1.5"
             >
               {index > 0 ? (
-                <span className="text-muted-foreground/60">/</span>
+                <span aria-hidden="true" className="text-muted-foreground/60">
+                  /
+                </span>
               ) : null}
               <span
                 className={cn(
@@ -121,12 +128,13 @@ export function LibraryHeader({
                 <div
                   className={cn(
                     'hidden items-center gap-2 rounded-md border border-border/70 bg-secondary/40 px-2.5 py-1 sm:flex',
-                    viewMode !== 'grid' && 'pointer-events-none opacity-40',
+                    sliderDisabled && 'opacity-40',
                   )}
                 >
                   <BookMarked className="size-3 text-muted-foreground" />
                   <Slider
                     aria-label="Tamaño de portadas"
+                    disabled={sliderDisabled}
                     value={[coverSize]}
                     min={110}
                     max={240}
@@ -139,13 +147,18 @@ export function LibraryHeader({
                     }}
                     className="w-24 [&_[data-slot=slider-range]]:bg-accent-brand [&_[data-slot=slider-thumb]]:size-3 [&_[data-slot=slider-thumb]]:border-accent-brand"
                   />
-                  <span className="w-8 text-right font-mono text-[10.5px] tabular-nums text-muted-foreground">
+                  <span
+                    aria-hidden="true"
+                    className="w-8 text-right font-mono text-[10.5px] tabular-nums text-muted-foreground"
+                  >
                     {coverSize}
                   </span>
                 </div>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                Tamaño de portadas ({coverSize}px)
+                {sliderDisabled
+                  ? 'Disponible en vista cuadrícula'
+                  : `Tamaño de portadas (${coverSize}px)`}
               </TooltipContent>
             </Tooltip>
 
@@ -187,35 +200,35 @@ export function LibraryHeader({
                   <ArrowUpDown className="size-3.5" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground">
                   Visualización
                 </DropdownMenuLabel>
-                <DropdownMenuItem
-                  onSelect={() => setGroupByShelf(!groupByShelf)}
-                  className="justify-between text-xs"
+                <DropdownMenuCheckboxItem
+                  checked={groupByShelf}
+                  onCheckedChange={(checked) => setGroupByShelf(checked === true)}
+                  className="text-xs"
                 >
-                  <span>Agrupar por estanterías</span>
-                  {groupByShelf ? (
-                    <Check className="size-3.5 text-accent-brand" />
-                  ) : null}
-                </DropdownMenuItem>
+                  Agrupar por estanterías
+                </DropdownMenuCheckboxItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground">
                   Ordenar por
                 </DropdownMenuLabel>
-                {SORT_OPTIONS.map((option) => (
-                  <DropdownMenuItem
-                    key={option}
-                    onSelect={() => setSortBy(option)}
-                    className="justify-between text-xs"
-                  >
-                    <span>{SORT_OPTION_LABELS[option]}</span>
-                    {sortBy === option ? (
-                      <Check className="size-3.5 text-accent-brand" />
-                    ) : null}
-                  </DropdownMenuItem>
-                ))}
+                <DropdownMenuRadioGroup
+                  value={sortBy}
+                  onValueChange={(value) => setSortBy(value as SortOption)}
+                >
+                  {SORT_OPTIONS.map((option) => (
+                    <DropdownMenuRadioItem
+                      key={option}
+                      value={option}
+                      className="text-xs"
+                    >
+                      {SORT_OPTION_LABELS[option]}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
           </>
@@ -225,12 +238,15 @@ export function LibraryHeader({
           type="button"
           variant="outline"
           size="sm"
+          aria-keyshortcuts="Control+K Meta+K"
+          onMouseEnter={onPreloadCommandPalette}
+          onFocus={onPreloadCommandPalette}
           onClick={() => setCommandPaletteOpen(true)}
           className="h-8 gap-2 px-2.5 text-xs text-muted-foreground hover:text-foreground"
         >
           <Search className="size-3.5" />
           <span className="hidden md:inline">Buscar</span>
-          <KbdGroup>
+          <KbdGroup aria-hidden="true">
             <Kbd className="h-4 min-w-4 border border-border bg-secondary px-1 font-mono text-[10px]">
               Ctrl
             </Kbd>
@@ -242,4 +258,4 @@ export function LibraryHeader({
       </div>
     </header>
   );
-}
+});

@@ -20,12 +20,12 @@ interface TagDialogProps {
 }
 
 const TAG_SWATCHES = [
-  '#818cf8',
-  '#6ee7b7',
-  '#38bdf8',
-  '#f472b6',
-  '#fbbf24',
-  '#94a3b8',
+  { value: '#818cf8', name: 'Índigo' },
+  { value: '#6ee7b7', name: 'Esmeralda' },
+  { value: '#38bdf8', name: 'Cielo' },
+  { value: '#f472b6', name: 'Rosa' },
+  { value: '#fbbf24', name: 'Ámbar' },
+  { value: '#94a3b8', name: 'Pizarra' },
 ] as const;
 
 function TagDialogForm({
@@ -79,37 +79,51 @@ function TagDialogForm({
           id="tag-name"
           type="text"
           autoFocus
+          aria-invalid={Boolean(errorMsg)}
+          aria-describedby={errorMsg ? 'tag-form-error' : undefined}
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            setName(e.target.value);
+            if (errorMsg) setErrorMsg(null);
+          }}
           placeholder="Ej. local-first, arquitectura, ensayos..."
           className="h-9 text-sm"
         />
       </div>
 
       <div className="space-y-2">
-        <span className="block text-xs font-medium text-muted-foreground">
+        <span
+          id="tag-color-label"
+          className="block text-xs font-medium text-muted-foreground"
+        >
           Marcador visual
         </span>
-        <div className="flex items-center gap-2">
+        <div
+          role="group"
+          aria-labelledby="tag-color-label"
+          className="flex items-center gap-2"
+        >
           {TAG_SWATCHES.map((swatch) => (
             <button
-              key={swatch}
+              key={swatch.value}
               type="button"
-              aria-label={`Color ${swatch}`}
-              onClick={() => setColor(swatch)}
+              aria-label={`Color ${swatch.name}`}
+              aria-pressed={color === swatch.value}
+              onClick={() => setColor(swatch.value)}
               className={cn(
-                'h-5 w-5 rounded-full border transition-transform',
-                color === swatch
+                'h-5 w-5 rounded-full border outline-none transition-transform focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                color === swatch.value
                   ? 'scale-110 border-foreground ring-2 ring-ring/40'
                   : 'border-transparent opacity-70 hover:opacity-100',
               )}
-              style={{ backgroundColor: swatch }}
+              style={{ backgroundColor: swatch.value }}
             />
           ))}
           <Button
             type="button"
             variant={color === null ? 'secondary' : 'ghost'}
             size="xs"
+            aria-pressed={color === null}
             onClick={() => setColor(null)}
             className="ml-1"
           >
@@ -119,7 +133,9 @@ function TagDialogForm({
       </div>
 
       {errorMsg ? (
-        <p className="text-xs text-destructive">{errorMsg}</p>
+        <p id="tag-form-error" role="alert" className="text-xs text-destructive">
+          {errorMsg}
+        </p>
       ) : null}
 
       <DialogFooter className="pt-2">

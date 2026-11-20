@@ -1,11 +1,12 @@
 import { ChevronRight } from 'lucide-react';
-import { useMemo, type CSSProperties } from 'react';
+import { memo, useMemo, type CSSProperties } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { BookCard } from '@/features/library/components/BookCard';
 import {
   groupItemsByShelf,
   shouldGroupByShelf,
 } from '@/features/library/lib/libraryGrouping';
+import { useUiStore } from '@/store/uiStore';
 import type {
   LibraryItemWithRelations,
   NavigationSection,
@@ -16,21 +17,20 @@ interface BookShelfGridProps {
   items: LibraryItemWithRelations[];
   shelves: ShelfWithCount[];
   section: NavigationSection;
-  coverSize: number;
   groupByShelf: boolean;
   onSelectItem: (id: string) => void;
   onSelectShelf: (shelfId: string) => void;
 }
 
-export function BookShelfGrid({
+export const BookShelfGrid = memo(function BookShelfGrid({
   items,
   shelves,
   section,
-  coverSize,
   groupByShelf,
   onSelectItem,
   onSelectShelf,
 }: BookShelfGridProps) {
+  const coverSize = useUiStore((s) => s.coverSize);
   const isGrouped = shouldGroupByShelf(section, groupByShelf, shelves);
 
   const groups = useMemo(() => {
@@ -59,40 +59,45 @@ export function BookShelfGrid({
   return (
     <div className="space-y-10 px-6 py-6">
       {groups.map((group) => (
-        <section key={group.key} className="space-y-4">
+        <section
+          key={group.key}
+          className="space-y-4 [content-visibility:auto] [contain-intrinsic-size:auto_320px]"
+        >
           {group.segments.length > 0 ? (
             <header className="flex items-center gap-3">
-              {group.shelfId ? (
-                <button
-                  type="button"
-                  onClick={() => onSelectShelf(group.shelfId!)}
-                  className="flex flex-wrap items-center gap-1.5 font-sans text-sm font-medium tracking-tight text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  {group.segments.map((segment, index) => (
-                    <span
-                      key={`${segment}-${index}`}
-                      className="flex items-center gap-1.5"
-                    >
-                      {index > 0 ? (
-                        <ChevronRight className="size-3.5 text-muted-foreground/60" />
-                      ) : null}
+              <h2 className="font-sans text-sm font-medium tracking-tight">
+                {group.shelfId ? (
+                  <button
+                    type="button"
+                    onClick={() => onSelectShelf(group.shelfId!)}
+                    className="flex flex-wrap items-center gap-1.5 rounded-sm text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {group.segments.map((segment, index) => (
                       <span
-                        className={
-                          index === group.segments.length - 1
-                            ? 'text-foreground'
-                            : 'text-muted-foreground'
-                        }
+                        key={`${segment}-${index}`}
+                        className="flex items-center gap-1.5"
                       >
-                        {segment}
+                        {index > 0 ? (
+                          <ChevronRight className="size-3.5 text-muted-foreground/60" />
+                        ) : null}
+                        <span
+                          className={
+                            index === group.segments.length - 1
+                              ? 'text-foreground'
+                              : 'text-muted-foreground'
+                          }
+                        >
+                          {segment}
+                        </span>
                       </span>
-                    </span>
-                  ))}
-                </button>
-              ) : (
-                <span className="font-sans text-sm font-medium tracking-tight text-muted-foreground">
-                  {group.segments[0]}
-                </span>
-              )}
+                    ))}
+                  </button>
+                ) : (
+                  <span className="text-muted-foreground">
+                    {group.segments[0]}
+                  </span>
+                )}
+              </h2>
 
               <Badge
                 variant="secondary"
@@ -109,7 +114,6 @@ export function BookShelfGrid({
               <BookCard
                 key={`${group.key}:${item.id}`}
                 item={item}
-                coverWidth={coverSize}
                 onSelect={onSelectItem}
               />
             ))}
@@ -118,4 +122,4 @@ export function BookShelfGrid({
       ))}
     </div>
   );
-}
+});

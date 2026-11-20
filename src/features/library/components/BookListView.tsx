@@ -18,24 +18,42 @@ interface BookListViewProps {
 
 interface BookListRowProps {
   item: LibraryItemWithRelations;
-  shelfNames: string[];
-  tagNames: string[];
+  shelfNameById: Map<string, string>;
+  tagNameById: Map<string, string>;
   onSelect: (id: string) => void;
+}
+
+function takeResolvedNames(
+  ids: string[],
+  nameMap: Map<string, string>,
+  limit: number,
+): string[] {
+  const result: string[] = [];
+  for (const id of ids) {
+    const name = nameMap.get(id);
+    if (name) {
+      result.push(name);
+      if (result.length >= limit) break;
+    }
+  }
+  return result;
 }
 
 const BookListRow = memo(function BookListRow({
   item,
-  shelfNames,
-  tagNames,
+  shelfNameById,
+  tagNameById,
   onSelect,
 }: BookListRowProps) {
   const assetUrl = useAssetUrl(item.cover_path);
+  const shelfNames = takeResolvedNames(item.shelf_ids, shelfNameById, 2);
+  const tagNames = takeResolvedNames(item.tag_ids, tagNameById, 2);
 
   return (
     <button
       type="button"
       onClick={() => onSelect(item.id)}
-      className="group grid w-full grid-cols-[40px_minmax(0,2fr)_minmax(0,1.3fr)_120px_100px_84px] items-center gap-4 rounded-lg px-3 py-2.5 text-left transition-colors [content-visibility:auto] [contain-intrinsic-size:64px] hover:bg-secondary/70 focus-visible:bg-secondary/70 focus-visible:outline-none"
+      className="group grid w-full grid-cols-[40px_minmax(0,2fr)_minmax(0,1.3fr)_120px_100px_84px] items-center gap-4 rounded-lg px-3 py-2.5 text-left outline-none transition-colors [content-visibility:auto] [contain-intrinsic-size:64px] hover:bg-secondary/70 focus-visible:bg-secondary/70 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
     >
       <div className="w-10 shrink-0">
         <CoverImage
@@ -45,12 +63,12 @@ const BookListRow = memo(function BookListRow({
           type={item.type}
           fileFormat={item.file_format}
           assetUrl={assetUrl}
-          width={40}
+          compact
         />
       </div>
 
       <div className="min-w-0">
-        <p className="truncate font-sans text-[13px] font-medium tracking-tight text-foreground transition-colors group-hover:text-accent-brand">
+        <p className="truncate font-sans text-[13px] font-medium tracking-tight text-foreground transition-colors group-hover:text-accent-brand group-focus-visible:text-accent-brand">
           {item.title}
         </p>
         <p className="mt-0.5 truncate font-serif text-[12px] italic text-muted-foreground">
@@ -59,7 +77,7 @@ const BookListRow = memo(function BookListRow({
       </div>
 
       <div className="flex min-w-0 flex-wrap gap-1">
-        {shelfNames.slice(0, 2).map((name) => (
+        {shelfNames.map((name) => (
           <Badge
             key={name}
             variant="secondary"
@@ -68,7 +86,7 @@ const BookListRow = memo(function BookListRow({
             {name}
           </Badge>
         ))}
-        {tagNames.slice(0, 2).map((name) => (
+        {tagNames.map((name) => (
           <Badge
             key={name}
             variant="outline"
@@ -122,24 +140,15 @@ export function BookListView({
       </div>
 
       <div className="divide-y divide-border/50">
-        {items.map((item) => {
-          const shelfNames = item.shelf_ids
-            .map((id) => shelfNameById.get(id))
-            .filter((name): name is string => Boolean(name));
-          const tagNames = item.tag_ids
-            .map((id) => tagNameById.get(id))
-            .filter((name): name is string => Boolean(name));
-
-          return (
-            <BookListRow
-              key={item.id}
-              item={item}
-              shelfNames={shelfNames}
-              tagNames={tagNames}
-              onSelect={onSelectItem}
-            />
-          );
-        })}
+        {items.map((item) => (
+          <BookListRow
+            key={item.id}
+            item={item}
+            shelfNameById={shelfNameById}
+            tagNameById={tagNameById}
+            onSelect={onSelectItem}
+          />
+        ))}
       </div>
     </div>
   );
