@@ -46,6 +46,7 @@ interface UiState {
   tagsExpanded: boolean;
   commandPaletteOpen: boolean;
   selectedItemId: string | null;
+  readerTarget: { itemId: string; page?: number } | null;
   navigate: (section: NavigationSection) => void;
   setActiveSection: (section: NavigationSection) => void;
   goBack: () => void;
@@ -61,6 +62,8 @@ interface UiState {
   toggleTagsExpanded: () => void;
   setCommandPaletteOpen: (open: boolean) => void;
   setSelectedItemId: (id: string | null) => void;
+  openReader: (itemId: string, page?: number) => void;
+  closeReader: () => void;
 }
 
 export const useUiStore = create<UiState>()(
@@ -79,10 +82,14 @@ export const useUiStore = create<UiState>()(
       tagsExpanded: true,
       commandPaletteOpen: false,
       selectedItemId: null,
+      readerTarget: null,
 
       navigate: (section) => {
-        const { activeSection, history, historyIndex } = get();
+        const { activeSection, history, historyIndex, readerTarget } = get();
         if (isSameNavigationSection(activeSection, section)) {
+          if (readerTarget !== null) {
+            set({ readerTarget: null });
+          }
           return;
         }
         const nextHistory = history.slice(0, historyIndex + 1);
@@ -95,6 +102,7 @@ export const useUiStore = create<UiState>()(
           activeSection: section,
           history: boundedHistory,
           historyIndex: boundedHistory.length - 1,
+          readerTarget: null,
         });
       },
 
@@ -108,6 +116,7 @@ export const useUiStore = create<UiState>()(
         set({
           activeSection: target,
           historyIndex: historyIndex - 1,
+          readerTarget: null,
         });
       },
 
@@ -119,6 +128,7 @@ export const useUiStore = create<UiState>()(
         set({
           activeSection: target,
           historyIndex: historyIndex + 1,
+          readerTarget: null,
         });
       },
 
@@ -156,7 +166,20 @@ export const useUiStore = create<UiState>()(
 
       setCommandPaletteOpen: (commandPaletteOpen) => set({ commandPaletteOpen }),
 
-      setSelectedItemId: (selectedItemId) => set({ selectedItemId }),
+      setSelectedItemId: (selectedItemId) =>
+        set((state) => ({
+          selectedItemId,
+          readerTarget: selectedItemId ? null : state.readerTarget,
+        })),
+
+      openReader: (itemId, page) =>
+        set({
+          readerTarget: { itemId, page },
+          selectedItemId: null,
+          commandPaletteOpen: false,
+        }),
+
+      closeReader: () => set({ readerTarget: null }),
     }),
     {
       name: 'librory-ui-v1',

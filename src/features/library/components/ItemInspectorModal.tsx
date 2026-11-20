@@ -1,4 +1,5 @@
 import {
+  BookOpen,
   Check,
   ExternalLink,
   FolderOpen,
@@ -40,6 +41,7 @@ import {
   useToggleItemShelf,
   useToggleItemTag,
 } from '@/features/shelves/hooks/useShelvesAndTags';
+import { isPdfReadableLocally } from '@/lib/highlights';
 import { getShelfBreadcrumb } from '@/lib/shelfTree';
 import { ITEM_STATUS_LABELS, ITEM_TYPE_SINGULAR } from '@/lib/text';
 import { cn } from '@/lib/utils';
@@ -58,6 +60,7 @@ interface ItemInspectorModalProps {
   shelves: ShelfWithCount[];
   tags: TagWithCount[];
   onClose: () => void;
+  onOpenReader: (itemId: string, page?: number) => void;
 }
 
 const INSPECTOR_SKELETON = (
@@ -81,11 +84,13 @@ function InspectorBody({
   shelves,
   tags,
   onClose,
+  onOpenReader,
 }: {
   item: LibraryItemWithRelations;
   shelves: ShelfWithCount[];
   tags: TagWithCount[];
   onClose: () => void;
+  onOpenReader: (itemId: string, page?: number) => void;
 }) {
   const assetUrl = useAssetUrl(item.cover_path, item.updated_at);
   const updateItem = useUpdateItem();
@@ -110,6 +115,11 @@ function InspectorBody({
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const savedTimerRef = useRef<number | null>(null);
   const isSample = item.file_path.startsWith('sample/');
+  const canReadLocally = isPdfReadableLocally(item.file_path, item.file_format);
+  const readingPercent =
+    item.page_count > 0 && item.current_page > 0
+      ? Math.min(100, Math.round((item.current_page / item.page_count) * 100))
+      : 0;
 
   useEffect(() => {
     return () => {
@@ -221,12 +231,39 @@ function InspectorBody({
           <p className="break-all font-mono text-[10.5px] text-muted-foreground">
             {item.file_path}
           </p>
+          {item.page_count > 0 && item.current_page > 0 ? (
+            <div className="flex items-center gap-2 pt-0.5">
+              <div className="h-1 flex-1 overflow-hidden rounded-full bg-secondary">
+                <div
+                  className="h-full rounded-full bg-accent-brand"
+                  style={{ width: `${readingPercent}%` }}
+                />
+              </div>
+              <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+                {readingPercent}%
+              </span>
+            </div>
+          ) : null}
         </div>
       </div>
 
       {!isSample ? (
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
+            {canReadLocally ? (
+              <Button
+                type="button"
+                variant="default"
+                size="xs"
+                onClick={() => onOpenReader(item.id)}
+              >
+                <BookOpen className="size-3" />
+                {item.current_page > 1
+                  ? `Continuar (pág. ${item.current_page})`
+                  : 'Leer PDF'}
+              </Button>
+            ) : null}
+
             <Button
               type="button"
               variant="outline"
@@ -240,7 +277,7 @@ function InspectorBody({
               }}
             >
               <ExternalLink className="size-3" />
-              Abrir archivo
+              Abrir externo
             </Button>
 
             <Button
@@ -599,6 +636,7 @@ export function ItemInspectorModal({
   shelves,
   tags,
   onClose,
+  onOpenReader,
 }: ItemInspectorModalProps) {
   const detailQuery = useItemDetail(itemId);
 
@@ -632,6 +670,7 @@ export function ItemInspectorModal({
               shelves={shelves}
               tags={tags}
               onClose={onClose}
+              onOpenReader={onOpenReader}
             />
           ) : (
             <p className="px-5 py-10 text-center text-xs text-muted-foreground">

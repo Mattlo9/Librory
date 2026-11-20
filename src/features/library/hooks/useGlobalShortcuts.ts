@@ -53,6 +53,9 @@ export function useGlobalShortcuts(
         !event.shiftKey &&
         !event.altKey
       ) {
+        if (useUiStore.getState().readerTarget !== null) {
+          return;
+        }
         event.preventDefault();
         importHandlerRef.current?.();
         return;

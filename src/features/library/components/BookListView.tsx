@@ -2,6 +2,7 @@ import { memo, useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { CoverImage } from '@/components/ui/cover-image';
 import { useAssetUrl } from '@/features/library/hooks/useAssetUrl';
+import { isPdfReadableLocally } from '@/lib/highlights';
 import { ITEM_STATUS_LABELS, ITEM_TYPE_SINGULAR } from '@/lib/text';
 import type {
   LibraryItemWithRelations,
@@ -14,6 +15,7 @@ interface BookListViewProps {
   shelves: ShelfWithCount[];
   tags: TagWithCount[];
   onSelectItem: (id: string) => void;
+  onOpenReader?: (id: string) => void;
 }
 
 interface BookListRowProps {
@@ -21,6 +23,7 @@ interface BookListRowProps {
   shelfNameById: Map<string, string>;
   tagNameById: Map<string, string>;
   onSelect: (id: string) => void;
+  onOpenReader?: (id: string) => void;
 }
 
 function takeResolvedNames(
@@ -44,16 +47,32 @@ const BookListRow = memo(function BookListRow({
   shelfNameById,
   tagNameById,
   onSelect,
+  onOpenReader,
 }: BookListRowProps) {
   const assetUrl = useAssetUrl(item.cover_path, item.updated_at);
   const shelfNames = takeResolvedNames(item.shelf_ids, shelfNameById, 2);
   const tagNames = takeResolvedNames(item.tag_ids, tagNameById, 2);
+  const canReadLocally = isPdfReadableLocally(item.file_path, item.file_format);
+  const readingPercent =
+    item.page_count > 0 && item.current_page > 0
+      ? Math.min(100, Math.round((item.current_page / item.page_count) * 100))
+      : 0;
 
   return (
     <button
       type="button"
       onClick={() => onSelect(item.id)}
-      className="group grid w-full grid-cols-[40px_minmax(0,2fr)_minmax(0,1.3fr)_120px_100px_84px] items-center gap-4 rounded-lg px-3 py-2.5 text-left outline-none transition-colors [content-visibility:auto] [contain-intrinsic-size:64px] hover:bg-secondary/70 focus-visible:bg-secondary/70 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      onDoubleClick={
+        canReadLocally && onOpenReader
+          ? () => onOpenReader(item.id)
+          : undefined
+      }
+      title={
+        canReadLocally
+          ? 'Clic para ver ficha · Doble clic para leer PDF'
+          : undefined
+      }
+      className="group grid w-full grid-cols-[40px_minmax(0,2fr)_minmax(0,1.3fr)_120px_100px_110px] items-center gap-4 rounded-lg px-3 py-2.5 text-left outline-none transition-colors [content-visibility:auto] [contain-intrinsic-size:64px] hover:bg-secondary/70 focus-visible:bg-secondary/70 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
     >
       <div className="w-10 shrink-0">
         <CoverImage
@@ -107,7 +126,11 @@ const BookListRow = memo(function BookListRow({
 
       <span className="text-right font-mono text-[11px] uppercase tabular-nums text-muted-foreground">
         {item.file_format}
-        {item.page_count > 0 ? ` · ${item.page_count}p` : ''}
+        {readingPercent > 0
+          ? ` · ${item.current_page}/${item.page_count}`
+          : item.page_count > 0
+            ? ` · ${item.page_count}p`
+            : ''}
       </span>
     </button>
   );
@@ -118,6 +141,7 @@ export function BookListView({
   shelves,
   tags,
   onSelectItem,
+  onOpenReader,
 }: BookListViewProps) {
   const shelfNameById = useMemo(
     () => new Map(shelves.map((shelf) => [shelf.id, shelf.name])),
@@ -130,7 +154,7 @@ export function BookListView({
 
   return (
     <div className="px-6 py-4">
-      <div className="mb-1 grid grid-cols-[40px_minmax(0,2fr)_minmax(0,1.3fr)_120px_100px_84px] gap-4 border-b border-border px-3 pb-2 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+      <div className="mb-1 grid grid-cols-[40px_minmax(0,2fr)_minmax(0,1.3fr)_120px_100px_110px] gap-4 border-b border-border px-3 pb-2 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
         <span />
         <span>Título y autor</span>
         <span>Estanterías y etiquetas</span>
@@ -147,6 +171,7 @@ export function BookListView({
             shelfNameById={shelfNameById}
             tagNameById={tagNameById}
             onSelect={onSelectItem}
+            onOpenReader={onOpenReader}
           />
         ))}
       </div>

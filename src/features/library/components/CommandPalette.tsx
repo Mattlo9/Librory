@@ -34,9 +34,11 @@ import {
 import { Kbd } from '@/components/ui/kbd';
 import {
   useClearSampleLibrary,
+  useSearchHighlightsFts,
   useSearchItemsFts,
   useSeedSampleLibrary,
 } from '@/features/library/hooks/useLibraryData';
+import { isPdfReadableLocally } from '@/lib/highlights';
 import { getShelfBreadcrumb } from '@/lib/shelfTree';
 import { ITEM_TYPE_SINGULAR, normalizeForSearch } from '@/lib/text';
 import { useUiStore } from '@/store/uiStore';
@@ -86,11 +88,13 @@ export function CommandPalette({
   const viewMode = useUiStore((s) => s.viewMode);
   const setViewMode = useUiStore((s) => s.setViewMode);
   const setSelectedItemId = useUiStore((s) => s.setSelectedItemId);
+  const openReader = useUiStore((s) => s.openReader);
 
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
 
   const searchQuery = useSearchItemsFts(deferredQuery, open);
+  const highlightsSearchQuery = useSearchHighlightsFts(deferredQuery, open);
   const { mutateAsync: seedSampleAsync } = useSeedSampleLibrary();
   const { mutateAsync: clearSampleAsync } = useClearSampleLibrary();
 
@@ -260,8 +264,10 @@ export function CommandPalette({
   }
 
   const ftsResults = searchQuery.data ?? [];
+  const highlightsFtsResults = highlightsSearchQuery.data ?? [];
   const hasAnyResults =
     ftsResults.length > 0 ||
+    highlightsFtsResults.length > 0 ||
     matchingShelves.length > 0 ||
     matchingTags.length > 0 ||
     quickActions.length > 0;
@@ -275,7 +281,7 @@ export function CommandPalette({
         <DialogHeader className="sr-only">
           <DialogTitle>Paleta de comandos</DialogTitle>
           <DialogDescription>
-            Busca libros por texto completo FTS5, estanterías, etiquetas o acciones.
+            Busca libros y subrayados por texto completo FTS5, estanterías, etiquetas o acciones.
           </DialogDescription>
         </DialogHeader>
 
@@ -289,7 +295,7 @@ export function CommandPalette({
                 autoFocus
                 value={query}
                 onValueChange={setQuery}
-                placeholder="Buscar títulos, autores, notas (FTS5), estanterías o comandos..."
+                placeholder="Buscar títulos, autores, subrayados (FTS5), estanterías o comandos..."
               />
             </div>
             <Kbd
@@ -301,7 +307,9 @@ export function CommandPalette({
           </div>
 
           <CommandList className="scrollbar-subtle max-h-[380px] p-1">
-            {!hasAnyResults && !searchQuery.isFetching ? (
+            {!hasAnyResults &&
+            !searchQuery.isFetching &&
+            !highlightsSearchQuery.isFetching ? (
               <CommandEmpty className="py-8 text-center text-xs text-muted-foreground">
                 Sin coincidencias para &ldquo;{query}&rdquo;.
               </CommandEmpty>
@@ -349,6 +357,57 @@ export function CommandPalette({
                   </CommandItem>
                 ))}
               </CommandGroup>
+            ) : null}
+
+            {deferredQuery.trim().length > 0 && highlightsFtsResults.length > 0 ? (
+              <>
+                <CommandSeparator />
+                <CommandGroup heading="Subrayados (FTS5)">
+                  {highlightsFtsResults.slice(0, 8).map((entry) => {
+                    const canReadLocally = isPdfReadableLocally(
+                      entry.item_file_path,
+                      entry.item_file_format,
+                    );
+                    return (
+                      <CommandItem
+                        key={entry.id}
+                        value={`highlight:${entry.id}`}
+                        onSelect={() =>
+                          runAndClose(() =>
+                            canReadLocally
+                              ? openReader(
+                                  entry.item_id,
+                                  entry.page_number ?? undefined,
+                                )
+                              : setSelectedItemId(entry.item_id),
+                          )
+                        }
+                        className="cursor-pointer justify-between gap-3"
+                      >
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <Highlighter className="size-4 shrink-0 text-amber-400" />
+                          <div className="min-w-0">
+                            <p className="truncate font-serif text-[13px] text-foreground">
+                              &ldquo;{entry.quote_text}&rdquo;
+                            </p>
+                            <p className="truncate text-[11px] text-muted-foreground">
+                              {entry.item_title}
+                            </p>
+                          </div>
+                        </div>
+                        {entry.page_number ? (
+                          <Badge
+                            variant="outline"
+                            className="shrink-0 rounded-md font-mono text-[10px] font-normal tabular-nums text-muted-foreground"
+                          >
+                            pág. {entry.page_number}
+                          </Badge>
+                        ) : null}
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              </>
             ) : null}
 
             {matchingShelves.length > 0 ? (

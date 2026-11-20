@@ -62,10 +62,28 @@ const LazyTagDialog = lazy(() =>
     default: m.TagDialog,
   })),
 );
+const LazyPdfReaderView = lazy(() =>
+  import('@/features/reader/components/PdfReaderView').then((m) => ({
+    default: m.PdfReaderView,
+  })),
+);
 
 function preloadCommandPalette(): void {
   void loadCommandPalette();
 }
+
+const READER_LOADING_SKELETON = (
+  <div className="flex h-screen w-screen flex-col bg-background">
+    <div className="flex h-12 items-center justify-between border-b border-border bg-sidebar px-4">
+      <Skeleton className="h-6 w-36" />
+      <Skeleton className="h-6 w-48" />
+      <Skeleton className="h-6 w-28" />
+    </div>
+    <div className="flex flex-1 items-center justify-center p-8">
+      <Skeleton className="h-[78vh] w-[540px] rounded-md" />
+    </div>
+  </div>
+);
 
 const EMPTY_NAV_COUNTS = {
   inbox: 0,
@@ -119,6 +137,9 @@ export function App() {
   const commandPaletteOpen = useUiStore((s) => s.commandPaletteOpen);
   const selectedItemId = useUiStore((s) => s.selectedItemId);
   const setSelectedItemId = useUiStore((s) => s.setSelectedItemId);
+  const readerTarget = useUiStore((s) => s.readerTarget);
+  const openReader = useUiStore((s) => s.openReader);
+  const closeReader = useUiStore((s) => s.closeReader);
 
   const [shelfDialogState, setShelfDialogState] = useState<{
     open: boolean;
@@ -249,142 +270,171 @@ export function App() {
     navCounts.all === 0 && activeTypeFilter === 'all';
 
   return (
-    <SidebarProvider
-      open={sidebarOpen}
-      onOpenChange={setSidebarOpen}
-      className="h-screen overflow-hidden"
-    >
-      <Sidebar
-        navCounts={navCounts}
-        shelves={shelves}
-        tags={tags}
-        onCreateShelf={handleCreateShelf}
-        onEditShelf={handleEditShelf}
-        onCreateTag={handleCreateTag}
-        onEditTag={handleEditTag}
-        onPreloadCommandPalette={preloadCommandPalette}
-      />
-
-      <SidebarInset className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden bg-background">
-        <LibraryHeader
-          segments={heading.segments}
-          showViewControls={!isHighlightsView}
-          isImporting={isImporting}
-          onImportFiles={importFromDialog}
-          onPreloadCommandPalette={preloadCommandPalette}
-        />
-
-        {!isHighlightsView ? (
-          <TypeFilterBar
-            activeType={activeTypeFilter}
-            counts={typeCounts}
-            onSelectType={setActiveTypeFilter}
+    <>
+      {readerTarget ? (
+        <div className="h-screen w-screen overflow-hidden bg-background">
+          <Suspense fallback={READER_LOADING_SKELETON}>
+            <LazyPdfReaderView
+              key={readerTarget.itemId}
+              itemId={readerTarget.itemId}
+              initialPage={readerTarget.page}
+              onClose={closeReader}
+            />
+          </Suspense>
+        </div>
+      ) : (
+        <SidebarProvider
+          open={sidebarOpen}
+          onOpenChange={setSidebarOpen}
+          className="h-screen overflow-hidden"
+        >
+          <Sidebar
+            navCounts={navCounts}
+            shelves={shelves}
+            tags={tags}
+            onCreateShelf={handleCreateShelf}
+            onEditShelf={handleEditShelf}
+            onCreateTag={handleCreateTag}
+            onEditTag={handleEditTag}
+            onPreloadCommandPalette={preloadCommandPalette}
           />
-        ) : null}
 
-        <div className="scrollbar-subtle flex-1 overflow-y-auto">
-          {isHighlightsView ? (
-            <Suspense fallback={LIBRARY_LOADING_SKELETON}>
-              <LazyHighlightsView onOpenItem={setSelectedItemId} />
-            </Suspense>
-          ) : itemsQuery.isLoading ? (
-            LIBRARY_LOADING_SKELETON
-          ) : items.length === 0 ? (
-            <div className="px-6 py-16">
-              {showEmptyLibraryActions ? (
-                <EmptyState
-                  icon={<Library className="size-5" />}
-                  title="Tu biblioteca local está vacía"
-                  description="Arrastra archivos PDF o EPUB a esta ventana o usa el selector nativo para guardarlos en tu biblioteca local con metadatos y miniatura."
-                  actions={
-                    <>
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={isImporting}
-                        onClick={() => void importFromDialog()}
-                      >
-                        <Upload className="size-4" />
-                        Importar PDF / EPUB
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleCreateShelf(null)}
-                      >
-                        <FolderPlus className="size-4" />
-                        Nueva estantería
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        disabled={seedSample.isPending}
-                        onClick={() => seedSample.mutate()}
-                      >
-                        <Sparkles className="size-4" />
-                        {seedSample.isPending
-                          ? 'Cargando ejemplo...'
-                          : 'Cargar colección de ejemplo'}
-                      </Button>
-                    </>
-                  }
+          <SidebarInset className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden bg-background">
+            <LibraryHeader
+              segments={heading.segments}
+              showViewControls={!isHighlightsView}
+              isImporting={isImporting}
+              onImportFiles={importFromDialog}
+              onPreloadCommandPalette={preloadCommandPalette}
+            />
+
+            {!isHighlightsView ? (
+              <TypeFilterBar
+                activeType={activeTypeFilter}
+                counts={typeCounts}
+                onSelectType={setActiveTypeFilter}
+              />
+            ) : null}
+
+            <div className="scrollbar-subtle flex-1 overflow-y-auto">
+              {isHighlightsView ? (
+                <Suspense fallback={LIBRARY_LOADING_SKELETON}>
+                  <LazyHighlightsView
+                    onOpenItem={setSelectedItemId}
+                    onOpenInReader={openReader}
+                  />
+                </Suspense>
+              ) : itemsQuery.isLoading ? (
+                LIBRARY_LOADING_SKELETON
+              ) : items.length === 0 ? (
+                <div className="px-6 py-16">
+                  {showEmptyLibraryActions ? (
+                    <EmptyState
+                      icon={<Library className="size-5" />}
+                      title="Tu biblioteca local está vacía"
+                      description="Arrastra archivos PDF o EPUB a esta ventana o usa el selector nativo para guardarlos en tu biblioteca local con metadatos y miniatura."
+                      actions={
+                        <>
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={isImporting}
+                            onClick={() => void importFromDialog()}
+                          >
+                            <Upload className="size-4" />
+                            Importar PDF / EPUB
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleCreateShelf(null)}
+                          >
+                            <FolderPlus className="size-4" />
+                            Nueva estantería
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            disabled={seedSample.isPending}
+                            onClick={() => seedSample.mutate()}
+                          >
+                            <Sparkles className="size-4" />
+                            {seedSample.isPending
+                              ? 'Cargando ejemplo...'
+                              : 'Cargar colección de ejemplo'}
+                          </Button>
+                        </>
+                      }
+                    />
+                  ) : (
+                    <EmptyState
+                      icon={<Library className="size-5" />}
+                      title="No hay recursos en esta vista"
+                      description={
+                        activeTypeFilter !== 'all'
+                          ? 'Prueba cambiando el filtro de tipo a All para ver todos los elementos de esta sección.'
+                          : 'Aún no hay elementos asignados a esta estantería o etiqueta.'
+                      }
+                      actions={
+                        activeTypeFilter !== 'all' ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setActiveTypeFilter('all')}
+                          >
+                            Mostrar todos los tipos
+                          </Button>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => navigate('all')}
+                          >
+                            Volver a All Books
+                          </Button>
+                        )
+                      }
+                    />
+                  )}
+                </div>
+              ) : viewMode === 'grid' ? (
+                <BookShelfGrid
+                  items={items}
+                  shelves={shelves}
+                  section={activeSection}
+                  groupByShelf={groupByShelf}
+                  onSelectItem={setSelectedItemId}
+                  onSelectShelf={handleSelectShelf}
+                  onOpenReader={openReader}
                 />
               ) : (
-                <EmptyState
-                  icon={<Library className="size-5" />}
-                  title="No hay recursos en esta vista"
-                  description={
-                    activeTypeFilter !== 'all'
-                      ? 'Prueba cambiando el filtro de tipo a All para ver todos los elementos de esta sección.'
-                      : 'Aún no hay elementos asignados a esta estantería o etiqueta.'
-                  }
-                  actions={
-                    activeTypeFilter !== 'all' ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setActiveTypeFilter('all')}
-                      >
-                        Mostrar todos los tipos
-                      </Button>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => navigate('all')}
-                      >
-                        Volver a All Books
-                      </Button>
-                    )
-                  }
-                />
+                <Suspense fallback={LIBRARY_LOADING_SKELETON}>
+                  <LazyBookListView
+                    items={items}
+                    shelves={shelves}
+                    tags={tags}
+                    onSelectItem={setSelectedItemId}
+                    onOpenReader={openReader}
+                  />
+                </Suspense>
               )}
             </div>
-          ) : viewMode === 'grid' ? (
-            <BookShelfGrid
-              items={items}
-              shelves={shelves}
-              section={activeSection}
-              groupByShelf={groupByShelf}
-              onSelectItem={setSelectedItemId}
-              onSelectShelf={handleSelectShelf}
-            />
-          ) : (
-            <Suspense fallback={LIBRARY_LOADING_SKELETON}>
-              <LazyBookListView
-                items={items}
-                shelves={shelves}
-                tags={tags}
-                onSelectItem={setSelectedItemId}
-              />
-            </Suspense>
-          )}
-        </div>
-      </SidebarInset>
+          </SidebarInset>
+
+          <ImportDropOverlay visible={isDraggingFiles} fileCount={draggedCount} />
+          <ImportStatusBanner
+            progress={importProgress}
+            summary={importSummary}
+            showGoToInbox={activeSection !== 'inbox'}
+            onGoToInbox={() => navigate('inbox')}
+            onDismiss={dismissSummary}
+          />
+        </SidebarProvider>
+      )}
 
       {hasMountedInspector ? (
         <Suspense fallback={null}>
@@ -393,6 +443,7 @@ export function App() {
             shelves={shelves}
             tags={tags}
             onClose={handleCloseInspector}
+            onOpenReader={openReader}
           />
         </Suspense>
       ) : null}
@@ -431,15 +482,6 @@ export function App() {
           />
         </Suspense>
       ) : null}
-
-      <ImportDropOverlay visible={isDraggingFiles} fileCount={draggedCount} />
-      <ImportStatusBanner
-        progress={importProgress}
-        summary={importSummary}
-        showGoToInbox={activeSection !== 'inbox'}
-        onGoToInbox={() => navigate('inbox')}
-        onDismiss={dismissSummary}
-      />
-    </SidebarProvider>
+    </>
   );
 }

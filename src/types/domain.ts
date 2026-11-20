@@ -178,6 +178,8 @@ export interface HighlightWithItem extends Highlight {
   item_title: string;
   item_author: string;
   item_type: ItemType;
+  item_file_format: FileFormat;
+  item_file_path: string;
 }
 
 export interface CreateHighlightInput {
@@ -187,6 +189,21 @@ export interface CreateHighlightInput {
   page_number?: number | null;
   location_cfi?: string | null;
   color?: HighlightColor;
+}
+
+export interface UpdateHighlightInput {
+  quote_text?: string;
+  note_markdown?: string;
+  page_number?: number | null;
+  location_cfi?: string | null;
+  color?: HighlightColor;
+}
+
+export interface SaveReadingProgressInput {
+  itemId: string;
+  currentPage: number;
+  pageCount?: number;
+  markFinished?: boolean;
 }
 
 export interface FtsSearchResult {

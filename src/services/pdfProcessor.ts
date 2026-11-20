@@ -79,8 +79,8 @@ export async function extractPdfMetadataAndCover(
     data: pdfBytes.slice(),
   });
   const canvas = document.createElement('canvas');
-  let pdf: Awaited<typeof loadingTask.promise> | null = null;
-  let page: Awaited<ReturnType<Awaited<typeof loadingTask.promise>['getPage']>> | null = null;
+  let pdf: pdfjsLib.PDFDocumentProxy | null = null;
+  let page: pdfjsLib.PDFPageProxy | null = null;
 
   try {
     pdf = await loadingTask.promise;

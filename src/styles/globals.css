@@ -129,3 +129,20 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Tokens CSS para EmbedPDF v3 alineados con Obsidian & Zinc Studio */
+embedpdf-viewer {
+  --epdf-accent: #818cf8;
+  --epdf-background: #09090b;
+  --epdf-surface: #0e0e11;
+  --epdf-surface-raised: #121216;
+  --epdf-text: #f4f4f5;
+  --epdf-text-muted: #8e8e98;
+  --epdf-border: #23232a;
+  --epdf-hover: #1c1c22;
+  --epdf-canvas: #070709;
+  --epdf-tooltip: #18181d;
+  --epdf-tooltip-text: #f4f4f5;
+  --epdf-radius: 0.5rem;
+  --epdf-font: "Geist Variable", "Inter", system-ui, -apple-system, sans-serif;
+}

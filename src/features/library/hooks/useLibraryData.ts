@@ -7,14 +7,19 @@ import {
   getNavigationCounts,
   hasSampleItems,
   listItemsWithRelations,
+  saveReadingProgress,
   searchItemsFts,
   updateItem,
 } from '@/services/bookRepository';
 import { isTauriRuntime } from '@/services/db';
 import { ensureStorageDirectories } from '@/services/fileService';
 import {
+  createHighlight,
   deleteHighlight,
+  listHighlightsByItem,
   listHighlightsWithItems,
+  searchHighlightsFts,
+  updateHighlight,
 } from '@/services/highlightRepository';
 import {
   clearItemCover,
@@ -26,12 +31,15 @@ import {
 import { collectDescendantShelfIds } from '@/lib/shelfTree';
 import { getNavigationSectionKey } from '@/store/uiStore';
 import type {
+  CreateHighlightInput,
   CreateItemInput,
   ItemFilter,
   ItemType,
   NavigationSection,
+  SaveReadingProgressInput,
   ShelfWithCount,
   SortOption,
+  UpdateHighlightInput,
   UpdateItemInput,
 } from '@/types/domain';
 
@@ -52,6 +60,12 @@ export const libraryKeys = {
   shelves: ['library', 'shelves'] as const,
   tags: ['library', 'tags'] as const,
   highlights: ['library', 'highlights'] as const,
+  itemHighlightsRoot: ['library', 'item-highlights'] as const,
+  itemHighlights: (itemId: string) =>
+    ['library', 'item-highlights', itemId] as const,
+  searchHighlightsFtsRoot: ['library', 'search-highlights-fts'] as const,
+  searchHighlightsFts: (query: string) =>
+    ['library', 'search-highlights-fts', query] as const,
   hasSample: ['library', 'has-sample'] as const,
 };
 
@@ -175,6 +189,26 @@ export function useHighlightsList(enabled: boolean) {
   });
 }
 
+export function useItemHighlights(itemId: string | null) {
+  const tauriActive = isTauriRuntime();
+  return useQuery({
+    queryKey: libraryKeys.itemHighlights(itemId ?? ''),
+    queryFn: () => (itemId ? listHighlightsByItem(itemId) : Promise.resolve([])),
+    enabled: Boolean(tauriActive && itemId),
+  });
+}
+
+export function useSearchHighlightsFts(query: string, enabled: boolean) {
+  const tauriActive = isTauriRuntime();
+  const trimmed = query.trim();
+
+  return useQuery({
+    queryKey: libraryKeys.searchHighlightsFts(trimmed),
+    queryFn: () => searchHighlightsFts(trimmed, 50),
+    enabled: tauriActive && enabled && trimmed.length > 0,
+  });
+}
+
 export function useHasSampleItems() {
   const tauriActive = isTauriRuntime();
   return useQuery({
@@ -274,6 +308,67 @@ export function useRevealBookInExplorer() {
   });
 }
 
+export function useSaveReadingProgress() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SaveReadingProgressInput) => saveReadingProgress(input),
+    onSuccess: (_data, variables) => {
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: libraryKeys.itemsRoot }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.navCounts }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.typeCountsRoot }),
+        queryClient.invalidateQueries({
+          queryKey: libraryKeys.itemDetail(variables.itemId),
+        }),
+      ]);
+    },
+  });
+}
+
+export function useCreateHighlight() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateHighlightInput) => createHighlight(input),
+    onSuccess: (_data, variables) => {
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: libraryKeys.highlights }),
+        queryClient.invalidateQueries({
+          queryKey: libraryKeys.itemHighlights(variables.item_id),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: libraryKeys.searchHighlightsFtsRoot,
+        }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.navCounts }),
+      ]);
+    },
+  });
+}
+
+export function useUpdateHighlight() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      patch,
+    }: {
+      id: string;
+      itemId: string;
+      patch: UpdateHighlightInput;
+    }) => updateHighlight(id, patch),
+    onSuccess: (_data, variables) => {
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: libraryKeys.highlights }),
+        queryClient.invalidateQueries({
+          queryKey: libraryKeys.itemHighlights(variables.itemId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: libraryKeys.searchHighlightsFtsRoot,
+        }),
+      ]);
+    },
+  });
+}
+
 export function useDeleteHighlight() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -281,6 +376,10 @@ export function useDeleteHighlight() {
     onSuccess: () => {
       void Promise.all([
         queryClient.invalidateQueries({ queryKey: libraryKeys.highlights }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.itemHighlightsRoot }),
+        queryClient.invalidateQueries({
+          queryKey: libraryKeys.searchHighlightsFtsRoot,
+        }),
         queryClient.invalidateQueries({ queryKey: libraryKeys.navCounts }),
       ]);
     },

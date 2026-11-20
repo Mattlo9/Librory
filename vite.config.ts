@@ -13,6 +13,9 @@ export default defineConfig({
     },
   },
   clearScreen: false,
+  optimizeDeps: {
+    exclude: ['@embedpdf/viewer-react', '@embedpdf/viewer'],
+  },
   build: {
     rolldownOptions: {
       output: {

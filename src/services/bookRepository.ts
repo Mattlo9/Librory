@@ -1,3 +1,4 @@
+import { sanitizeFtsQuery } from '@/lib/text';
 import { getDb } from '@/services/db';
 import type {
   CreateItemInput,
@@ -7,19 +8,10 @@ import type {
   ItemType,
   LibraryItem,
   LibraryItemWithRelations,
+  SaveReadingProgressInput,
   SortOption,
   UpdateItemInput,
 } from '@/types/domain';
-
-function sanitizeFtsQuery(rawQuery: string): string {
-  const tokens = rawQuery
-    .trim()
-    .split(/\s+/)
-    .map((token) => token.replace(/["*^():]/g, '').trim())
-    .filter((token) => token.length > 0);
-
-  return tokens.map((token) => `"${token}"*`).join(' ');
-}
 
 function resolveOrderClause(sortBy?: SortOption, recentOnly?: boolean): string {
   if (recentOnly) {
@@ -306,6 +298,42 @@ export async function updateItem(
 export async function deleteItem(id: string): Promise<void> {
   const db = await getDb();
   await db.execute('DELETE FROM items WHERE id = $1', [id]);
+}
+
+export async function saveReadingProgress(
+  input: SaveReadingProgressInput,
+): Promise<LibraryItem | null> {
+  const existing = await getItemById(input.itemId);
+  if (!existing) {
+    return null;
+  }
+
+  const resolvedPageCount =
+    input.pageCount && input.pageCount > 0 ? input.pageCount : existing.page_count;
+
+  const flooredPage = Math.max(1, Math.floor(input.currentPage));
+  const clampedPage =
+    resolvedPageCount > 0 ? Math.min(resolvedPageCount, flooredPage) : flooredPage;
+
+  let nextStatus: ItemStatus = existing.status;
+  if (input.markFinished === true) {
+    nextStatus = 'finished';
+  } else if (input.markFinished === false && existing.status === 'finished') {
+    nextStatus = 'reading';
+  } else if (
+    input.markFinished === undefined &&
+    (existing.status === 'inbox' || existing.status === 'to_read')
+  ) {
+    nextStatus = 'reading';
+  }
+
+  return updateItem(input.itemId, {
+    current_page: clampedPage,
+    page_count:
+      resolvedPageCount !== existing.page_count ? resolvedPageCount : undefined,
+    status: nextStatus,
+    last_opened_at: new Date().toISOString(),
+  });
 }
 
 export async function searchItemsFts(

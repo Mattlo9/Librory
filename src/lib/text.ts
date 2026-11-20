@@ -10,6 +10,16 @@ export function normalizeForSearch(value: string): string {
     .trim();
 }
 
+export function sanitizeFtsQuery(rawQuery: string): string {
+  const tokens = rawQuery
+    .trim()
+    .split(/\s+/)
+    .map((token) => token.replace(/["*^():]/g, '').trim())
+    .filter((token) => token.length > 0);
+
+  return tokens.map((token) => `"${token}"*`).join(' ');
+}
+
 export const ITEM_TYPE_LABELS: Record<ItemType, string> = {
   book: 'Books',
   summary: 'Summaries',

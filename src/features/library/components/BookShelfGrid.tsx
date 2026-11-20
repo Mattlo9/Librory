@@ -20,6 +20,7 @@ interface BookShelfGridProps {
   groupByShelf: boolean;
   onSelectItem: (id: string) => void;
   onSelectShelf: (shelfId: string) => void;
+  onOpenReader?: (id: string) => void;
 }
 
 export const BookShelfGrid = memo(function BookShelfGrid({
@@ -29,6 +30,7 @@ export const BookShelfGrid = memo(function BookShelfGrid({
   groupByShelf,
   onSelectItem,
   onSelectShelf,
+  onOpenReader,
 }: BookShelfGridProps) {
   const coverSize = useUiStore((s) => s.coverSize);
   const isGrouped = shouldGroupByShelf(section, groupByShelf, shelves);
@@ -115,6 +117,7 @@ export const BookShelfGrid = memo(function BookShelfGrid({
                 key={`${group.key}:${item.id}`}
                 item={item}
                 onSelect={onSelectItem}
+                onOpenReader={onOpenReader}
               />
             ))}
           </div>
