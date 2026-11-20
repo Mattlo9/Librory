@@ -4,12 +4,14 @@
   --color-bg-base: #191716;
   --color-bg-sidebar: #141211;
   --color-bg-elevated: #211e1c;
-  --color-bg-hover: #282422;
-  --color-border-subtle: #2e2a27;
-  --color-border-strong: #3d3733;
+  --color-bg-active: #272320;
+  --color-bg-hover: #24201d;
+  --color-border-subtle: #2b2623;
+  --color-border-strong: #3c3530;
+  --color-shelf-rule: #3a322b;
   --color-text-primary: #e6dfd3;
   --color-text-secondary: #9a9186;
-  --color-text-muted: #696158;
+  --color-text-muted: #6c635a;
   --color-accent: #d4a373;
   --color-status-ok: #7d9b76;
   --color-status-warn: #c9975b;
@@ -24,6 +26,7 @@
   body,
   #root {
     height: 100%;
+    overflow: hidden;
   }
 
   body {
@@ -32,4 +35,61 @@
     font-family: var(--font-sans);
     margin: 0;
   }
+}
+
+/* Micro-trama sutil tipo lino sobre carbón cálido sin imágenes externas */
+.bg-linen-surface {
+  background-color: var(--color-bg-base);
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      rgba(255, 248, 238, 0.018) 0px,
+      rgba(255, 248, 238, 0.018) 1px,
+      transparent 1px,
+      transparent 4px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.045) 0px,
+      rgba(0, 0, 0, 0.045) 1px,
+      transparent 1px,
+      transparent 4px
+    );
+}
+
+.scrollbar-subtle {
+  scrollbar-width: thin;
+  scrollbar-color: #362f2a transparent;
+}
+
+.scrollbar-subtle::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.scrollbar-subtle::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-subtle::-webkit-scrollbar-thumb {
+  background-color: #332c28;
+  border-radius: 999px;
+}
+
+.scrollbar-subtle::-webkit-scrollbar-thumb:hover {
+  background-color: #463d37;
+}
+
+[cmdk-group-heading] {
+  padding: 6px 12px 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+[cmdk-item][data-selected='true'] {
+  background-color: var(--color-bg-active);
+  color: var(--color-text-primary);
 }

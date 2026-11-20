@@ -6,6 +6,8 @@ import type {
   ItemStatus,
   ItemType,
   LibraryItem,
+  LibraryItemWithRelations,
+  SortOption,
   UpdateItemInput,
 } from '@/types/domain';
 
@@ -19,13 +21,42 @@ function sanitizeFtsQuery(rawQuery: string): string {
   return tokens.map((token) => `"${token}"*`).join(' ');
 }
 
-export async function listItems(filter: ItemFilter = {}): Promise<LibraryItem[]> {
-  const db = await getDb();
+function resolveOrderClause(sortBy?: SortOption, recentOnly?: boolean): string {
+  if (recentOnly) {
+    return 'ORDER BY i.last_opened_at DESC';
+  }
+  switch (sortBy) {
+    case 'title_asc':
+      return 'ORDER BY i.title COLLATE NOCASE ASC';
+    case 'author_asc':
+      return 'ORDER BY CASE WHEN i.author = \'\' THEN 1 ELSE 0 END, i.author COLLATE NOCASE ASC, i.title COLLATE NOCASE ASC';
+    case 'created_desc':
+    default:
+      return 'ORDER BY i.created_at DESC';
+  }
+}
+
+function buildFilterParts(filter: ItemFilter): {
+  emptyResult: boolean;
+  joinsSql: string;
+  whereSql: string;
+  params: unknown[];
+} {
   const joins: string[] = [];
   const clauses: string[] = [];
   const params: unknown[] = [];
 
-  if (filter.shelfId) {
+  if (filter.shelfIds !== undefined) {
+    if (filter.shelfIds.length === 0) {
+      return { emptyResult: true, joinsSql: '', whereSql: '', params: [] };
+    }
+    joins.push('INNER JOIN item_shelves ishf ON ishf.item_id = i.id');
+    const placeholders = filter.shelfIds.map((shelfId) => {
+      params.push(shelfId);
+      return `$${params.length}`;
+    });
+    clauses.push(`ishf.shelf_id IN (${placeholders.join(', ')})`);
+  } else if (filter.shelfId) {
     joins.push('INNER JOIN item_shelves ishf ON ishf.item_id = i.id');
     params.push(filter.shelfId);
     clauses.push(`ishf.shelf_id = $${params.length}`);
@@ -51,10 +82,22 @@ export async function listItems(filter: ItemFilter = {}): Promise<LibraryItem[]>
     clauses.push('i.last_opened_at IS NOT NULL');
   }
 
-  const whereSql = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
-  const orderSql = filter.recentOnly
-    ? 'ORDER BY i.last_opened_at DESC'
-    : 'ORDER BY i.created_at DESC';
+  return {
+    emptyResult: false,
+    joinsSql: joins.join('\n    '),
+    whereSql: clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '',
+    params,
+  };
+}
+
+export async function listItems(filter: ItemFilter = {}): Promise<LibraryItem[]> {
+  const { emptyResult, joinsSql, whereSql, params } = buildFilterParts(filter);
+  if (emptyResult) {
+    return [];
+  }
+
+  const db = await getDb();
+  const orderSql = resolveOrderClause(filter.sortBy, filter.recentOnly);
 
   let limitSql = '';
   if (typeof filter.limit === 'number' && filter.limit > 0) {
@@ -63,15 +106,50 @@ export async function listItems(filter: ItemFilter = {}): Promise<LibraryItem[]>
   }
 
   const sql = `
-    SELECT i.*
+    SELECT DISTINCT i.*
     FROM items i
-    ${joins.join('\n    ')}
+    ${joinsSql}
     ${whereSql}
     ${orderSql}
     ${limitSql}
   `;
 
   return db.select<LibraryItem[]>(sql, params);
+}
+
+export async function listItemsWithRelations(
+  filter: ItemFilter = {},
+): Promise<LibraryItemWithRelations[]> {
+  const db = await getDb();
+  const [items, shelfLinks, tagLinks] = await Promise.all([
+    listItems(filter),
+    db.select<Array<{ item_id: string; shelf_id: string }>>(
+      'SELECT item_id, shelf_id FROM item_shelves',
+    ),
+    db.select<Array<{ item_id: string; tag_id: string }>>(
+      'SELECT item_id, tag_id FROM item_tags',
+    ),
+  ]);
+
+  const shelvesByItem = new Map<string, string[]>();
+  for (const link of shelfLinks) {
+    const list = shelvesByItem.get(link.item_id) ?? [];
+    list.push(link.shelf_id);
+    shelvesByItem.set(link.item_id, list);
+  }
+
+  const tagsByItem = new Map<string, string[]>();
+  for (const link of tagLinks) {
+    const list = tagsByItem.get(link.item_id) ?? [];
+    list.push(link.tag_id);
+    tagsByItem.set(link.item_id, list);
+  }
+
+  return items.map((item) => ({
+    ...item,
+    shelf_ids: shelvesByItem.get(item.id) ?? [],
+    tag_ids: tagsByItem.get(item.id) ?? [],
+  }));
 }
 
 export async function getItemById(id: string): Promise<LibraryItem | null> {
@@ -81,6 +159,31 @@ export async function getItemById(id: string): Promise<LibraryItem | null> {
     [id],
   );
   return rows[0] ?? null;
+}
+
+export async function getItemWithRelationsById(
+  id: string,
+): Promise<LibraryItemWithRelations | null> {
+  const db = await getDb();
+  const [item, shelfLinks, tagLinks] = await Promise.all([
+    getItemById(id),
+    db.select<Array<{ shelf_id: string }>>(
+      'SELECT shelf_id FROM item_shelves WHERE item_id = $1',
+      [id],
+    ),
+    db.select<Array<{ tag_id: string }>>(
+      'SELECT tag_id FROM item_tags WHERE item_id = $1',
+      [id],
+    ),
+  ]);
+
+  if (!item) return null;
+
+  return {
+    ...item,
+    shelf_ids: shelfLinks.map((row) => row.shelf_id),
+    tag_ids: tagLinks.map((row) => row.tag_id),
+  };
 }
 
 export async function createItem(input: CreateItemInput): Promise<LibraryItem> {
@@ -195,12 +298,9 @@ export async function searchItemsFts(
   }));
 }
 
-export async function getItemCountsByType(): Promise<Record<ItemType | 'all', number>> {
-  const db = await getDb();
-  const rows = await db.select<Array<{ type: ItemType; count: number }>>(
-    'SELECT type, COUNT(*) AS count FROM items GROUP BY type',
-  );
-
+export async function getItemCountsByType(
+  filter: Omit<ItemFilter, 'type' | 'sortBy' | 'limit'> = {},
+): Promise<Record<ItemType | 'all', number>> {
   const counts: Record<ItemType | 'all', number> = {
     all: 0,
     book: 0,
@@ -210,6 +310,21 @@ export async function getItemCountsByType(): Promise<Record<ItemType | 'all', nu
     course: 0,
     unsorted: 0,
   };
+
+  const { emptyResult, joinsSql, whereSql, params } = buildFilterParts(filter);
+  if (emptyResult) {
+    return counts;
+  }
+
+  const db = await getDb();
+  const rows = await db.select<Array<{ type: ItemType; count: number }>>(
+    `SELECT i.type, COUNT(DISTINCT i.id) AS count
+     FROM items i
+     ${joinsSql}
+     ${whereSql}
+     GROUP BY i.type`,
+    params,
+  );
 
   for (const row of rows) {
     counts[row.type] = row.count;

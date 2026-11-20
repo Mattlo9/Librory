@@ -43,6 +43,8 @@ export type NavigationSection =
 
 export type ViewMode = 'grid' | 'list';
 
+export type SortOption = 'created_desc' | 'title_asc' | 'author_asc';
+
 export interface LibraryItem {
   id: string;
   title: string;
@@ -90,12 +92,19 @@ export interface UpdateItemInput {
   last_opened_at?: string | null;
 }
 
+export interface LibraryItemWithRelations extends LibraryItem {
+  shelf_ids: string[];
+  tag_ids: string[];
+}
+
 export interface ItemFilter {
   status?: ItemStatus;
   type?: ItemType;
   shelfId?: string;
+  shelfIds?: string[];
   tagId?: string;
   recentOnly?: boolean;
+  sortBy?: SortOption;
   limit?: number;
 }
 
@@ -110,6 +119,7 @@ export interface Shelf {
 }
 
 export interface ShelfWithCount extends Shelf {
+  direct_item_count: number;
   item_count: number;
 }
 
@@ -142,6 +152,16 @@ export interface TagWithCount extends Tag {
   item_count: number;
 }
 
+export interface CreateTagInput {
+  name: string;
+  color?: string | null;
+}
+
+export interface UpdateTagInput {
+  name?: string;
+  color?: string | null;
+}
+
 export interface Highlight {
   id: string;
   item_id: string;
@@ -152,6 +172,12 @@ export interface Highlight {
   color: HighlightColor;
   created_at: string;
   updated_at: string;
+}
+
+export interface HighlightWithItem extends Highlight {
+  item_title: string;
+  item_author: string;
+  item_type: ItemType;
 }
 
 export interface CreateHighlightInput {
