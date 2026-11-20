@@ -214,3 +214,26 @@ export interface DatabaseHealthReport {
   itemsCount: number;
   ftsIndexedCount: number;
 }
+
+export type ImportFileOutcome = 'imported' | 'duplicate' | 'unsupported' | 'error';
+
+export interface ImportBatchProgress {
+  active: boolean;
+  current: number;
+  total: number;
+  currentFilename: string;
+}
+
+export interface ImportBatchSummary {
+  imported: LibraryItem[];
+  duplicates: string[];
+  unsupported: string[];
+  errors: Array<{ filename: string; reason: string }>;
+}
+
+export interface ExtractedDocumentMeta {
+  title: string | null;
+  author: string | null;
+  pageCount: number;
+  coverWebpBytes: Uint8Array | null;
+}

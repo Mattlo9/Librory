@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useUiStore } from '@/store/uiStore';
 import type { NavigationSection } from '@/types/domain';
 
@@ -23,9 +23,19 @@ function isEditableElement(target: EventTarget | null): boolean {
 /**
  * Registers global desktop keyboard shortcuts once without subscribing to UI store state.
  * - Ctrl/Cmd+K: toggle command palette
+ * - Ctrl/Cmd+I: open native file import picker
  * - Alt+1..4: jump to Inbox, All Books, Recent, Highlights
  */
-export function useGlobalShortcuts(enabled: boolean): void {
+export function useGlobalShortcuts(
+  enabled: boolean,
+  onImportFiles?: () => void,
+): void {
+  const importHandlerRef = useRef(onImportFiles);
+
+  useEffect(() => {
+    importHandlerRef.current = onImportFiles;
+  }, [onImportFiles]);
+
   useEffect(() => {
     if (!enabled) return;
 
@@ -34,6 +44,17 @@ export function useGlobalShortcuts(enabled: boolean): void {
         event.preventDefault();
         const { commandPaletteOpen, setCommandPaletteOpen } = useUiStore.getState();
         setCommandPaletteOpen(!commandPaletteOpen);
+        return;
+      }
+
+      if (
+        event.key.toLowerCase() === 'i' &&
+        (event.ctrlKey || event.metaKey) &&
+        !event.shiftKey &&
+        !event.altKey
+      ) {
+        event.preventDefault();
+        importHandlerRef.current?.();
         return;
       }
 

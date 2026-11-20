@@ -1,12 +1,25 @@
-import { convertFileSrc } from '@tauri-apps/api/core';
+import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { appDataDir, BaseDirectory, join } from '@tauri-apps/api/path';
-import { exists, mkdir } from '@tauri-apps/plugin-fs';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { exists, mkdir, readFile, remove, writeFile } from '@tauri-apps/plugin-fs';
+import { openPath, revealItemInDir } from '@tauri-apps/plugin-opener';
 import { isTauriRuntime } from '@/services/db';
-import type { StorageDiagnostics } from '@/types/domain';
+import type { FileFormat, StorageDiagnostics } from '@/types/domain';
 
 export const BOOKS_DIR = 'books';
 export const COVERS_DIR = 'covers';
 export const DB_FILENAME = 'library.db';
+
+export interface RustImportReport {
+  status: 'imported' | 'duplicate';
+  itemId: string;
+  filePath: string;
+  fileFormat: FileFormat;
+  fileSize: number;
+  fileHash: string;
+  originalFilename: string;
+}
 
 let appDataDirPromise: Promise<string> | null = null;
 
@@ -69,11 +82,105 @@ export async function getAbsoluteStoragePath(relativePath: string): Promise<stri
 /**
  * Converts a stored relative asset path (e.g. "covers/id.webp") into a WebView asset URL without Base64.
  */
-export async function resolveAssetUrl(relativePath: string | null): Promise<string | null> {
+export async function resolveAssetUrl(
+  relativePath: string | null,
+  cacheBust?: string,
+): Promise<string | null> {
   if (!relativePath) {
     return null;
   }
 
   const absolutePath = await getAbsoluteStoragePath(relativePath);
-  return convertFileSrc(absolutePath);
+  const assetUrl = convertFileSrc(absolutePath);
+  return cacheBust ? `${assetUrl}?v=${encodeURIComponent(cacheBust)}` : assetUrl;
+}
+
+export async function pickImportableFiles(): Promise<string[]> {
+  const selection = await openDialog({
+    title: 'Importar libros y documentos',
+    multiple: true,
+    filters: [
+      {
+        name: 'Documentos (PDF, EPUB)',
+        extensions: ['pdf', 'epub'],
+      },
+    ],
+  });
+
+  if (!selection) {
+    return [];
+  }
+
+  return Array.isArray(selection) ? selection : [selection];
+}
+
+export async function subscribeToFileDrops(handlers: {
+  onEnter?: (paths: string[]) => void;
+  onLeave?: () => void;
+  onDrop: (paths: string[]) => void;
+}): Promise<() => void> {
+  const unlisten = await getCurrentWebview().onDragDropEvent((event) => {
+    const payload = event.payload;
+    if (payload.type === 'enter') {
+      handlers.onEnter?.(payload.paths);
+    } else if (payload.type === 'leave') {
+      handlers.onLeave?.();
+    } else if (payload.type === 'drop') {
+      handlers.onDrop(payload.paths);
+    }
+  });
+
+  return unlisten;
+}
+
+export async function copyExternalBookToLibrary(
+  sourcePath: string,
+  itemId: string,
+  knownHashes: string[],
+): Promise<RustImportReport> {
+  return invoke<RustImportReport>('import_book_file', {
+    sourcePath,
+    itemId,
+    knownHashes,
+  });
+}
+
+export async function readStoredFileBytes(relativePath: string): Promise<Uint8Array> {
+  return readFile(relativePath, { baseDir: BaseDirectory.AppData });
+}
+
+export async function writeCoverWebp(
+  itemId: string,
+  bytes: Uint8Array,
+): Promise<string> {
+  await ensureAppDataSubdir(COVERS_DIR);
+  const relativePath = `${COVERS_DIR}/${itemId}.webp`;
+  await writeFile(relativePath, bytes, { baseDir: BaseDirectory.AppData });
+  return relativePath;
+}
+
+export async function removeStoredFile(relativePath: string | null): Promise<void> {
+  if (!relativePath) return;
+  if (
+    !relativePath.startsWith(`${BOOKS_DIR}/`) &&
+    !relativePath.startsWith(`${COVERS_DIR}/`)
+  ) {
+    return;
+  }
+
+  try {
+    await remove(relativePath, { baseDir: BaseDirectory.AppData });
+  } catch {
+    // Ignorar si el archivo ya fue eliminado manualmente del disco.
+  }
+}
+
+export async function openStoredBook(relativePath: string): Promise<void> {
+  const absolutePath = await getAbsoluteStoragePath(relativePath);
+  await openPath(absolutePath);
+}
+
+export async function revealStoredBook(relativePath: string): Promise<void> {
+  const absolutePath = await getAbsoluteStoragePath(relativePath);
+  await revealItemInDir(absolutePath);
 }

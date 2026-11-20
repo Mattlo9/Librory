@@ -16,7 +16,7 @@ export const BookCard = memo(function BookCard({
   item,
   onSelect,
 }: BookCardProps) {
-  const assetUrl = useAssetUrl(item.cover_path);
+  const assetUrl = useAssetUrl(item.cover_path, item.updated_at);
 
   return (
     <button

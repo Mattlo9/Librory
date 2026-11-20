@@ -1,4 +1,5 @@
 mod db;
+mod import;
 
 use std::fs;
 use tauri::Manager;
@@ -25,6 +26,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .invoke_handler(tauri::generate_handler![import::import_book_file])
         .setup(|app| {
             ensure_local_storage(app.handle())?;
             Ok(())

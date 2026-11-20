@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import {
   createItem,
-  deleteItem,
   getItemCountsByType,
   getItemWithRelationsById,
   getNavigationCounts,
@@ -17,6 +16,13 @@ import {
   deleteHighlight,
   listHighlightsWithItems,
 } from '@/services/highlightRepository';
+import {
+  clearItemCover,
+  deleteItemAndFiles,
+  openBookExternally,
+  regenerateItemCover,
+  revealBookInExplorer,
+} from '@/services/importService';
 import { collectDescendantShelfIds } from '@/lib/shelfTree';
 import { getNavigationSectionKey } from '@/store/uiStore';
 import type {
@@ -211,10 +217,60 @@ export function useUpdateItem() {
 export function useDeleteItem() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => deleteItem(id),
+    mutationFn: (id: string) => deleteItemAndFiles(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: libraryKeys.all });
     },
+  });
+}
+
+export function useRegenerateItemCover() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (item: Parameters<typeof regenerateItemCover>[0]) =>
+      regenerateItemCover(item),
+    onSuccess: (_data, item) => {
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: libraryKeys.itemsRoot }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.itemDetail(item.id) }),
+      ]);
+    },
+  });
+}
+
+export function useClearItemCover() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (item: Parameters<typeof clearItemCover>[0]) =>
+      clearItemCover(item),
+    onSuccess: (_data, item) => {
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: libraryKeys.itemsRoot }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.itemDetail(item.id) }),
+      ]);
+    },
+  });
+}
+
+export function useOpenBookExternally() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (item: Parameters<typeof openBookExternally>[0]) =>
+      openBookExternally(item),
+    onSuccess: (_data, item) => {
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: libraryKeys.itemsRoot }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.navCounts }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.itemDetail(item.id) }),
+      ]);
+    },
+  });
+}
+
+export function useRevealBookInExplorer() {
+  return useMutation({
+    mutationFn: (item: Parameters<typeof revealBookInExplorer>[0]) =>
+      revealBookInExplorer(item),
   });
 }
 

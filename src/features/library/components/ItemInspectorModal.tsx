@@ -1,4 +1,13 @@
-import { Check, Hash, Plus, Trash2 } from 'lucide-react';
+import {
+  Check,
+  ExternalLink,
+  FolderOpen,
+  Hash,
+  ImageDown,
+  Plus,
+  Trash2,
+  Type,
+} from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -18,8 +27,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { useAssetUrl } from '@/features/library/hooks/useAssetUrl';
 import {
+  useClearItemCover,
   useDeleteItem,
   useItemDetail,
+  useOpenBookExternally,
+  useRegenerateItemCover,
+  useRevealBookInExplorer,
   useUpdateItem,
 } from '@/features/library/hooks/useLibraryData';
 import {
@@ -74,9 +87,13 @@ function InspectorBody({
   tags: TagWithCount[];
   onClose: () => void;
 }) {
-  const assetUrl = useAssetUrl(item.cover_path);
+  const assetUrl = useAssetUrl(item.cover_path, item.updated_at);
   const updateItem = useUpdateItem();
   const deleteItem = useDeleteItem();
+  const regenerateCover = useRegenerateItemCover();
+  const clearCover = useClearItemCover();
+  const openBook = useOpenBookExternally();
+  const revealBook = useRevealBookInExplorer();
   const toggleShelf = useToggleItemShelf();
   const toggleTag = useToggleItemTag();
   const createTag = useCreateTag();
@@ -88,9 +105,11 @@ function InspectorBody({
   const [notes, setNotes] = useState(item.notes);
   const [newTagName, setNewTagName] = useState('');
   const [tagError, setTagError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [savedNotice, setSavedNotice] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const savedTimerRef = useRef<number | null>(null);
+  const isSample = item.file_path.startsWith('sample/');
 
   useEffect(() => {
     return () => {
@@ -204,6 +223,86 @@ function InspectorBody({
           </p>
         </div>
       </div>
+
+      {!isSample ? (
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              disabled={openBook.isPending}
+              onClick={() => {
+                setActionError(null);
+                void openBook.mutateAsync(item).catch((err: unknown) => {
+                  setActionError(err instanceof Error ? err.message : String(err));
+                });
+              }}
+            >
+              <ExternalLink className="size-3" />
+              Abrir archivo
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              disabled={revealBook.isPending}
+              onClick={() => {
+                setActionError(null);
+                void revealBook.mutateAsync(item).catch((err: unknown) => {
+                  setActionError(err instanceof Error ? err.message : String(err));
+                });
+              }}
+            >
+              <FolderOpen className="size-3" />
+              En carpeta
+            </Button>
+
+            {item.cover_path ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                disabled={clearCover.isPending}
+                onClick={() => {
+                  setActionError(null);
+                  void clearCover.mutateAsync(item).catch((err: unknown) => {
+                    setActionError(err instanceof Error ? err.message : String(err));
+                  });
+                }}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <Type className="size-3" />
+                Usar tipográfica
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                disabled={regenerateCover.isPending}
+                onClick={() => {
+                  setActionError(null);
+                  void regenerateCover.mutateAsync(item).catch((err: unknown) => {
+                    setActionError(err instanceof Error ? err.message : String(err));
+                  });
+                }}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <ImageDown className="size-3" />
+                {regenerateCover.isPending ? 'Extrayendo...' : 'Extraer portada'}
+              </Button>
+            )}
+          </div>
+
+          {actionError ? (
+            <p role="alert" className="text-xs text-destructive">
+              {actionError}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       <form onSubmit={(e) => void handleSaveMetadata(e)} className="space-y-3.5">
         <div className="space-y-1.5">

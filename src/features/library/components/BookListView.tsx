@@ -45,7 +45,7 @@ const BookListRow = memo(function BookListRow({
   tagNameById,
   onSelect,
 }: BookListRowProps) {
-  const assetUrl = useAssetUrl(item.cover_path);
+  const assetUrl = useAssetUrl(item.cover_path, item.updated_at);
   const shelfNames = takeResolvedNames(item.shelf_ids, shelfNameById, 2);
   const tagNames = takeResolvedNames(item.tag_ids, tagNameById, 2);
 

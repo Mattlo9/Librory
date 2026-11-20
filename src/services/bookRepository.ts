@@ -414,6 +414,14 @@ export async function hasSampleItems(): Promise<boolean> {
   return (rows[0]?.count ?? 0) > 0;
 }
 
+export async function listAllFileHashes(): Promise<string[]> {
+  const db = await getDb();
+  const rows = await db.select<Array<{ file_hash: string }>>(
+    'SELECT file_hash FROM items WHERE file_hash IS NOT NULL',
+  );
+  return rows.map((row) => row.file_hash);
+}
+
 /**
  * Phase 1 smoke test: verifies FTS5 triggers and accent-insensitive unicode61 tokenization.
  */

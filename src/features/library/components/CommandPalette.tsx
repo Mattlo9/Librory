@@ -10,6 +10,7 @@ import {
   Library,
   Sparkles,
   Tag,
+  Upload,
 } from 'lucide-react';
 import { useDeferredValue, useMemo, useState, type ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -47,6 +48,7 @@ interface CommandPaletteProps {
   hasSample: boolean;
   onCreateShelf: () => void;
   onCreateTag: () => void;
+  onImportFiles?: () => void;
 }
 
 interface QuickActionItem {
@@ -67,6 +69,7 @@ const ACTION_ICONS = {
   newTag: <Tag className="size-4" />,
   toggleView: <LayoutGrid className="size-4" />,
   sample: <Sparkles className="size-4" />,
+  importFiles: <Upload className="size-4" />,
 } as const;
 
 export function CommandPalette({
@@ -75,6 +78,7 @@ export function CommandPalette({
   hasSample,
   onCreateShelf,
   onCreateTag,
+  onImportFiles,
 }: CommandPaletteProps) {
   const open = useUiStore((s) => s.commandPaletteOpen);
   const setOpen = useUiStore((s) => s.setCommandPaletteOpen);
@@ -159,6 +163,18 @@ export function CommandPalette({
         icon: ACTION_ICONS.highlights,
         run: () => navigate('highlights'),
       },
+      ...(onImportFiles
+        ? [
+            {
+              id: 'import-files',
+              label: 'Importar archivos (PDF / EPUB)',
+              keywords: 'importar agregar subir pdf epub libros archivo',
+              shortcut: 'Ctrl+I',
+              icon: ACTION_ICONS.importFiles,
+              run: onImportFiles,
+            },
+          ]
+        : []),
       {
         id: 'new-shelf',
         label: 'Crear nueva estantería',
@@ -218,6 +234,7 @@ export function CommandPalette({
     navigate,
     onCreateShelf,
     onCreateTag,
+    onImportFiles,
     seedSampleAsync,
     setViewMode,
     viewMode,

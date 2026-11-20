@@ -5,11 +5,14 @@ import { resolveAssetUrl } from '@/services/fileService';
 /**
  * Resolves a stored relative asset path (e.g. "covers/<id>.webp") via Tauri's convertFileSrc.
  */
-export function useAssetUrl(relativePath: string | null): string | null {
+export function useAssetUrl(
+  relativePath: string | null,
+  cacheBust?: string,
+): string | null {
   const tauriActive = isTauriRuntime();
   const { data } = useQuery({
-    queryKey: ['asset-url', relativePath],
-    queryFn: () => resolveAssetUrl(relativePath),
+    queryKey: ['asset-url', relativePath, cacheBust ?? ''],
+    queryFn: () => resolveAssetUrl(relativePath, cacheBust),
     enabled: Boolean(tauriActive && relativePath),
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: 1000 * 60 * 30,

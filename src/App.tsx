@@ -1,13 +1,16 @@
-import { FolderPlus, Library, Sparkles, Terminal } from 'lucide-react';
+import { FolderPlus, Library, Sparkles, Terminal, Upload } from 'lucide-react';
 import { lazy, Suspense, useCallback, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BookShelfGrid } from '@/features/library/components/BookShelfGrid';
+import { ImportDropOverlay } from '@/features/library/components/ImportDropOverlay';
+import { ImportStatusBanner } from '@/features/library/components/ImportStatusBanner';
 import { LibraryHeader } from '@/features/library/components/LibraryHeader';
 import { TypeFilterBar } from '@/features/library/components/TypeFilterBar';
 import { useGlobalShortcuts } from '@/features/library/hooks/useGlobalShortcuts';
+import { useImportBooks } from '@/features/library/hooks/useImportBooks';
 import {
   useEnsureStorageDirectories,
   useHasSampleItems,
@@ -148,7 +151,17 @@ export function App() {
     setHasMountedTagDialog(true);
   }
 
-  useGlobalShortcuts(tauriActive);
+  const {
+    isDraggingFiles,
+    draggedCount,
+    isImporting,
+    progress: importProgress,
+    summary: importSummary,
+    importFromDialog,
+    dismissSummary,
+  } = useImportBooks(tauriActive);
+
+  useGlobalShortcuts(tauriActive, importFromDialog);
   useEnsureStorageDirectories();
 
   const shelvesQuery = useShelves();
@@ -256,6 +269,8 @@ export function App() {
         <LibraryHeader
           segments={heading.segments}
           showViewControls={!isHighlightsView}
+          isImporting={isImporting}
+          onImportFiles={importFromDialog}
           onPreloadCommandPalette={preloadCommandPalette}
         />
 
@@ -280,9 +295,18 @@ export function App() {
                 <EmptyState
                   icon={<Library className="size-5" />}
                   title="Tu biblioteca local está vacía"
-                  description="En la Fase 3 integraremos la importación de archivos PDF/EPUB desde tu equipo. Mientras tanto, puedes crear tu estructura de estanterías o cargar una colección de ejemplo para explorar el nuevo diseño."
+                  description="Arrastra archivos PDF o EPUB a esta ventana o usa el selector nativo para guardarlos en tu biblioteca local con metadatos y miniatura."
                   actions={
                     <>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={isImporting}
+                        onClick={() => void importFromDialog()}
+                      >
+                        <Upload className="size-4" />
+                        Importar PDF / EPUB
+                      </Button>
                       <Button
                         type="button"
                         variant="outline"
@@ -294,6 +318,7 @@ export function App() {
                       </Button>
                       <Button
                         type="button"
+                        variant="ghost"
                         size="sm"
                         disabled={seedSample.isPending}
                         onClick={() => seedSample.mutate()}
@@ -402,9 +427,19 @@ export function App() {
             hasSample={Boolean(hasSampleQuery.data)}
             onCreateShelf={handleCreateShelf}
             onCreateTag={handleCreateTag}
+            onImportFiles={importFromDialog}
           />
         </Suspense>
       ) : null}
+
+      <ImportDropOverlay visible={isDraggingFiles} fileCount={draggedCount} />
+      <ImportStatusBanner
+        progress={importProgress}
+        summary={importSummary}
+        showGoToInbox={activeSection !== 'inbox'}
+        onGoToInbox={() => navigate('inbox')}
+        onDismiss={dismissSummary}
+      />
     </SidebarProvider>
   );
 }

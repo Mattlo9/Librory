@@ -6,6 +6,7 @@ import {
   LayoutGrid,
   List,
   Search,
+  Upload,
 } from 'lucide-react';
 import { memo } from 'react';
 import { Button } from '@/components/ui/button';
@@ -37,6 +38,8 @@ import type { SortOption, ViewMode } from '@/types/domain';
 interface LibraryHeaderProps {
   segments: string[];
   showViewControls: boolean;
+  isImporting?: boolean;
+  onImportFiles?: () => void;
   onPreloadCommandPalette?: () => void;
 }
 
@@ -45,6 +48,8 @@ const SORT_OPTIONS: SortOption[] = ['created_desc', 'title_asc', 'author_asc'];
 export const LibraryHeader = memo(function LibraryHeader({
   segments,
   showViewControls,
+  isImporting = false,
+  onImportFiles,
   onPreloadCommandPalette,
 }: LibraryHeaderProps) {
   const historyIndex = useUiStore((s) => s.historyIndex);
@@ -232,6 +237,28 @@ export const LibraryHeader = memo(function LibraryHeader({
               </DropdownMenuContent>
             </DropdownMenu>
           </>
+        ) : null}
+
+        {onImportFiles ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isImporting}
+                aria-keyshortcuts="Control+I Meta+I"
+                onClick={onImportFiles}
+                className="h-8 gap-1.5 px-2.5 text-xs"
+              >
+                <Upload className="size-3.5" />
+                <span className="hidden sm:inline">Importar</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              Importar PDF o EPUB (Ctrl+I)
+            </TooltipContent>
+          </Tooltip>
         ) : null}
 
         <Button
