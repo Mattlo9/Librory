@@ -1,34 +1,34 @@
 import { memo } from 'react';
-import { CoverImage } from '@/components/ui/CoverImage';
+import { CoverImage } from '@/components/ui/cover-image';
 import { useAssetUrl } from '@/features/library/hooks/useAssetUrl';
 import type { LibraryItemWithRelations } from '@/types/domain';
 
 interface BookCardProps {
   item: LibraryItemWithRelations;
-  coverWidth: number;
   onSelect: (id: string) => void;
 }
 
+const COVER_BOX_STYLE = {
+  height: 'calc(var(--cover-w, 158px) * 1.44)',
+} as const;
+
 export const BookCard = memo(function BookCard({
   item,
-  coverWidth,
   onSelect,
 }: BookCardProps) {
   const assetUrl = useAssetUrl(item.cover_path);
-  const shelfBoxHeight = Math.round(coverWidth * 1.46);
 
   return (
     <button
       type="button"
       onClick={() => onSelect(item.id)}
-      className="group flex w-full flex-col text-left focus-visible:outline-none"
+      className="group flex w-full flex-col rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
-      {/* Extiende la línea inferior hasta el punto medio del gap para formar una estantería continua */}
       <div
-        className="-mx-3 flex items-end justify-center border-b border-shelf-rule px-3 pb-0 transition-colors group-hover:border-accent/45"
-        style={{ height: shelfBoxHeight }}
+        className="flex w-full items-end justify-center pb-2"
+        style={COVER_BOX_STYLE}
       >
-        <div className="w-full transition-transform duration-150 group-hover:-translate-y-0.5 group-focus-visible:-translate-y-0.5">
+        <div className="w-full transition-transform duration-200 ease-out group-hover:-translate-y-1 group-focus-visible:-translate-y-1">
           <CoverImage
             id={item.id}
             title={item.title}
@@ -36,17 +36,17 @@ export const BookCard = memo(function BookCard({
             type={item.type}
             fileFormat={item.file_format}
             assetUrl={assetUrl}
-            width={coverWidth}
+            className="transition-shadow duration-200 group-hover:ring-accent-brand/45 group-focus-visible:ring-accent-brand/60"
           />
         </div>
       </div>
 
-      <div className="pt-2">
-        <p className="line-clamp-2 font-mono text-[11.5px] leading-snug text-text-primary transition-colors group-hover:text-accent group-focus-visible:text-accent">
+      <div className="space-y-0.5 pt-1">
+        <p className="line-clamp-2 font-sans text-[13px] font-medium leading-snug tracking-tight text-foreground transition-colors group-hover:text-accent-brand group-focus-visible:text-accent-brand">
           {item.title}
         </p>
         {item.author ? (
-          <p className="mt-0.5 truncate text-[11px] italic text-text-secondary">
+          <p className="truncate font-serif text-[12px] italic text-muted-foreground">
             {item.author}
           </p>
         ) : null}

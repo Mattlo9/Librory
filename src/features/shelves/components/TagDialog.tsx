@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -6,9 +7,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/Dialog';
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { useCreateTag, useUpdateTag } from '@/features/shelves/hooks/useShelvesAndTags';
-import { cn } from '@/lib/cn';
+import { cn } from '@/lib/utils';
 import type { TagWithCount } from '@/types/domain';
 
 interface TagDialogProps {
@@ -18,12 +20,12 @@ interface TagDialogProps {
 }
 
 const TAG_SWATCHES = [
-  '#d4a373',
-  '#7d9b76',
-  '#6d8aa6',
-  '#b57468',
-  '#9b8bb4',
-  '#9a9186',
+  { value: '#818cf8', name: 'Índigo' },
+  { value: '#6ee7b7', name: 'Esmeralda' },
+  { value: '#38bdf8', name: 'Cielo' },
+  { value: '#f472b6', name: 'Rosa' },
+  { value: '#fbbf24', name: 'Ámbar' },
+  { value: '#94a3b8', name: 'Pizarra' },
 ] as const;
 
 function TagDialogForm({
@@ -34,7 +36,7 @@ function TagDialogForm({
   const updateTag = useUpdateTag();
 
   const [name, setName] = useState(editingTag?.name ?? '');
-  const [color, setColor] = useState<string | null>(editingTag?.color ?? '#d4a373');
+  const [color, setColor] = useState<string | null>(editingTag?.color ?? '#818cf8');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const isEditing = Boolean(editingTag);
@@ -69,79 +71,89 @@ function TagDialogForm({
       <div className="space-y-1.5">
         <label
           htmlFor="tag-name"
-          className="block font-mono text-[11px] text-text-secondary"
+          className="block text-xs font-medium text-muted-foreground"
         >
           Nombre
         </label>
-        <input
+        <Input
           id="tag-name"
           type="text"
           autoFocus
+          aria-invalid={Boolean(errorMsg)}
+          aria-describedby={errorMsg ? 'tag-form-error' : undefined}
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            setName(e.target.value);
+            if (errorMsg) setErrorMsg(null);
+          }}
           placeholder="Ej. local-first, arquitectura, ensayos..."
-          className="w-full rounded border border-border-strong bg-bg-base px-3 py-2 text-xs text-text-primary placeholder:text-text-muted focus:border-accent/70 focus:outline-none"
+          className="h-9 text-sm"
         />
       </div>
 
-      <div className="space-y-1.5">
-        <span className="block font-mono text-[11px] text-text-secondary">
+      <div className="space-y-2">
+        <span
+          id="tag-color-label"
+          className="block text-xs font-medium text-muted-foreground"
+        >
           Marcador visual
         </span>
-        <div className="flex items-center gap-2">
+        <div
+          role="group"
+          aria-labelledby="tag-color-label"
+          className="flex items-center gap-2"
+        >
           {TAG_SWATCHES.map((swatch) => (
             <button
-              key={swatch}
+              key={swatch.value}
               type="button"
-              aria-label={`Color ${swatch}`}
-              onClick={() => setColor(swatch)}
+              aria-label={`Color ${swatch.name}`}
+              aria-pressed={color === swatch.value}
+              onClick={() => setColor(swatch.value)}
               className={cn(
-                'h-5 w-5 rounded-full border transition-transform',
-                color === swatch
-                  ? 'scale-110 border-text-primary'
-                  : 'border-transparent opacity-75 hover:opacity-100',
+                'h-5 w-5 rounded-full border outline-none transition-transform focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                color === swatch.value
+                  ? 'scale-110 border-foreground ring-2 ring-ring/40'
+                  : 'border-transparent opacity-70 hover:opacity-100',
               )}
-              style={{ backgroundColor: swatch }}
+              style={{ backgroundColor: swatch.value }}
             />
           ))}
-          <button
+          <Button
             type="button"
+            variant={color === null ? 'secondary' : 'ghost'}
+            size="xs"
+            aria-pressed={color === null}
             onClick={() => setColor(null)}
-            className={cn(
-              'ml-1 rounded border px-2 py-0.5 font-mono text-[10px]',
-              color === null
-                ? 'border-accent/60 text-accent'
-                : 'border-border-subtle text-text-muted hover:text-text-secondary',
-            )}
+            className="ml-1"
           >
             Neutro
-          </button>
+          </Button>
         </div>
       </div>
 
       {errorMsg ? (
-        <p className="font-mono text-[11px] text-status-error">{errorMsg}</p>
+        <p id="tag-form-error" role="alert" className="text-xs text-destructive">
+          {errorMsg}
+        </p>
       ) : null}
 
-      <DialogFooter>
-        <button
+      <DialogFooter className="pt-2">
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           onClick={() => onOpenChange(false)}
-          className="rounded border border-border-subtle bg-bg-base px-3 py-1.5 font-mono text-xs text-text-secondary transition-colors hover:border-border-strong hover:text-text-primary"
         >
           Cancelar
-        </button>
-        <button
-          type="submit"
-          disabled={isPending}
-          className="rounded border border-accent/50 bg-accent/15 px-3.5 py-1.5 font-mono text-xs text-accent transition-colors hover:bg-accent/25 disabled:opacity-50"
-        >
+        </Button>
+        <Button type="submit" size="sm" disabled={isPending}>
           {isPending
             ? 'Guardando...'
             : isEditing
               ? 'Guardar cambios'
               : 'Crear etiqueta'}
-        </button>
+        </Button>
       </DialogFooter>
     </form>
   );
@@ -154,9 +166,9 @@ export function TagDialog({
 }: TagDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[min(92vw,420px)]">
+      <DialogContent className="sm:max-w-[420px]">
         <DialogHeader>
-          <DialogTitle>
+          <DialogTitle className="tracking-tight">
             {editingTag ? 'Editar etiqueta' : 'Nueva etiqueta'}
           </DialogTitle>
           <DialogDescription>

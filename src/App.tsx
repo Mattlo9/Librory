@@ -1,30 +1,68 @@
-import { useQuery } from '@tanstack/react-query';
 import { FolderPlus, Library, Sparkles, Terminal } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import { EmptyState } from '@/components/ui/EmptyState';
-import { HighlightsView } from '@/features/highlights/components/HighlightsView';
-import { BookListView } from '@/features/library/components/BookListView';
+import { lazy, Suspense, useCallback, useMemo, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
+import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
+import { Skeleton } from '@/components/ui/skeleton';
 import { BookShelfGrid } from '@/features/library/components/BookShelfGrid';
-import { CommandPalette } from '@/features/library/components/CommandPalette';
-import { ItemInspectorModal } from '@/features/library/components/ItemInspectorModal';
 import { LibraryHeader } from '@/features/library/components/LibraryHeader';
 import { TypeFilterBar } from '@/features/library/components/TypeFilterBar';
+import { useGlobalShortcuts } from '@/features/library/hooks/useGlobalShortcuts';
 import {
+  useEnsureStorageDirectories,
   useHasSampleItems,
+  useIsTauriRuntime,
   useLibraryItems,
   useNavigationCounts,
   useSeedSampleLibrary,
   useTypeCounts,
 } from '@/features/library/hooks/useLibraryData';
 import { getSectionHeading } from '@/features/library/lib/libraryGrouping';
-import { ShelfDialog } from '@/features/shelves/components/ShelfDialog';
 import { Sidebar } from '@/features/shelves/components/Sidebar';
-import { TagDialog } from '@/features/shelves/components/TagDialog';
 import { useShelves, useTags } from '@/features/shelves/hooks/useShelvesAndTags';
-import { isTauriRuntime } from '@/services/db';
-import { ensureStorageDirectories } from '@/services/fileService';
 import { useUiStore } from '@/store/uiStore';
-import type { ItemType, ShelfWithCount, TagWithCount } from '@/types/domain';
+import type {
+  ItemType,
+  LibraryItemWithRelations,
+  ShelfWithCount,
+  TagWithCount,
+} from '@/types/domain';
+
+const loadCommandPalette = () =>
+  import('@/features/library/components/CommandPalette').then((m) => ({
+    default: m.CommandPalette,
+  }));
+
+const LazyCommandPalette = lazy(loadCommandPalette);
+const LazyItemInspectorModal = lazy(() =>
+  import('@/features/library/components/ItemInspectorModal').then((m) => ({
+    default: m.ItemInspectorModal,
+  })),
+);
+const LazyHighlightsView = lazy(() =>
+  import('@/features/highlights/components/HighlightsView').then((m) => ({
+    default: m.HighlightsView,
+  })),
+);
+const LazyBookListView = lazy(() =>
+  import('@/features/library/components/BookListView').then((m) => ({
+    default: m.BookListView,
+  })),
+);
+const LazyShelfDialog = lazy(() =>
+  import('@/features/shelves/components/ShelfDialog').then((m) => ({
+    default: m.ShelfDialog,
+  })),
+);
+const LazyTagDialog = lazy(() =>
+  import('@/features/shelves/components/TagDialog').then((m) => ({
+    default: m.TagDialog,
+  })),
+);
+
+function preloadCommandPalette(): void {
+  void loadCommandPalette();
+}
 
 const EMPTY_NAV_COUNTS = {
   inbox: 0,
@@ -43,17 +81,39 @@ const EMPTY_TYPE_COUNTS: Record<ItemType | 'all', number> = {
   unsorted: 0,
 };
 
+const EMPTY_SHELVES: ShelfWithCount[] = [];
+const EMPTY_TAGS: TagWithCount[] = [];
+const EMPTY_ITEMS: LibraryItemWithRelations[] = [];
+
+const LIBRARY_LOADING_SKELETON = (
+  <div
+    role="status"
+    aria-label="Cargando biblioteca"
+    className="grid grid-cols-[repeat(auto-fill,minmax(158px,158px))] gap-x-6 gap-y-8 px-6 py-6"
+  >
+    {Array.from({ length: 8 }, (_, idx) => (
+      <div key={idx} className="space-y-2.5">
+        <Skeleton className="aspect-[2/3] w-full rounded-md" />
+        <Skeleton className="h-3.5 w-4/5" />
+        <Skeleton className="h-3 w-3/5" />
+      </div>
+    ))}
+  </div>
+);
+
 export function App() {
-  const tauriActive = isTauriRuntime();
+  const tauriActive = useIsTauriRuntime();
 
   const activeSection = useUiStore((s) => s.activeSection);
   const navigate = useUiStore((s) => s.navigate);
   const activeTypeFilter = useUiStore((s) => s.activeTypeFilter);
   const setActiveTypeFilter = useUiStore((s) => s.setActiveTypeFilter);
-  const coverSize = useUiStore((s) => s.coverSize);
   const viewMode = useUiStore((s) => s.viewMode);
   const sortBy = useUiStore((s) => s.sortBy);
   const groupByShelf = useUiStore((s) => s.groupByShelf);
+  const sidebarOpen = useUiStore((s) => s.sidebarOpen);
+  const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
+  const commandPaletteOpen = useUiStore((s) => s.commandPaletteOpen);
   const selectedItemId = useUiStore((s) => s.selectedItemId);
   const setSelectedItemId = useUiStore((s) => s.setSelectedItemId);
 
@@ -68,12 +128,28 @@ export function App() {
     editingTag: TagWithCount | null;
   }>({ open: false, editingTag: null });
 
-  useQuery({
-    queryKey: ['app', 'storage-dirs'],
-    queryFn: ensureStorageDirectories,
-    enabled: tauriActive,
-    staleTime: Number.POSITIVE_INFINITY,
-  });
+  // Latch mount state on first activation so overlays split out of initial load
+  // while keeping smooth close transitions after first open.
+  const [hasMountedPalette, setHasMountedPalette] = useState(false);
+  const [hasMountedInspector, setHasMountedInspector] = useState(false);
+  const [hasMountedShelfDialog, setHasMountedShelfDialog] = useState(false);
+  const [hasMountedTagDialog, setHasMountedTagDialog] = useState(false);
+
+  if (commandPaletteOpen && !hasMountedPalette) {
+    setHasMountedPalette(true);
+  }
+  if (selectedItemId && !hasMountedInspector) {
+    setHasMountedInspector(true);
+  }
+  if (shelfDialogState.open && !hasMountedShelfDialog) {
+    setHasMountedShelfDialog(true);
+  }
+  if (tagDialogState.open && !hasMountedTagDialog) {
+    setHasMountedTagDialog(true);
+  }
+
+  useGlobalShortcuts(tauriActive);
+  useEnsureStorageDirectories();
 
   const shelvesQuery = useShelves();
   const tagsQuery = useTags();
@@ -81,8 +157,8 @@ export function App() {
   const hasSampleQuery = useHasSampleItems();
   const seedSample = useSeedSampleLibrary();
 
-  const shelves = shelvesQuery.data ?? [];
-  const tags = tagsQuery.data ?? [];
+  const shelves = shelvesQuery.data ?? EMPTY_SHELVES;
+  const tags = tagsQuery.data ?? EMPTY_TAGS;
   const navCounts = navCountsQuery.data ?? EMPTY_NAV_COUNTS;
 
   const typeCountsQuery = useTypeCounts(activeSection, shelves);
@@ -94,18 +170,60 @@ export function App() {
   );
 
   const typeCounts = typeCountsQuery.data ?? EMPTY_TYPE_COUNTS;
-  const items = itemsQuery.data ?? [];
+  const items = itemsQuery.data ?? EMPTY_ITEMS;
 
   const heading = useMemo(
     () => getSectionHeading(activeSection, shelves, tags),
     [activeSection, shelves, tags],
   );
 
+  const handleCreateShelf = useCallback((parentId: string | null = null) => {
+    setShelfDialogState({
+      open: true,
+      editingShelf: null,
+      parentId,
+    });
+  }, []);
+
+  const handleEditShelf = useCallback((shelf: ShelfWithCount) => {
+    setShelfDialogState({
+      open: true,
+      editingShelf: shelf,
+      parentId: shelf.parent_id,
+    });
+  }, []);
+
+  const handleCreateTag = useCallback(() => {
+    setTagDialogState({ open: true, editingTag: null });
+  }, []);
+
+  const handleEditTag = useCallback((tag: TagWithCount) => {
+    setTagDialogState({ open: true, editingTag: tag });
+  }, []);
+
+  const handleSelectShelf = useCallback(
+    (shelfId: string) => navigate({ kind: 'shelf', shelfId }),
+    [navigate],
+  );
+
+  const handleCloseInspector = useCallback(
+    () => setSelectedItemId(null),
+    [setSelectedItemId],
+  );
+
+  const handleShelfDialogOpenChange = useCallback((open: boolean) => {
+    setShelfDialogState((prev) => ({ ...prev, open }));
+  }, []);
+
+  const handleTagDialogOpenChange = useCallback((open: boolean) => {
+    setTagDialogState((prev) => ({ ...prev, open }));
+  }, []);
+
   if (!tauriActive) {
     return (
-      <div className="bg-linen-surface flex h-screen items-center justify-center p-6">
+      <div className="flex h-screen items-center justify-center bg-background p-6">
         <EmptyState
-          icon={<Terminal className="h-5 w-5" />}
+          icon={<Terminal className="size-5" />}
           title="Ejecuta Librory en el runtime de escritorio"
           description="La base de datos SQLite local y el sistema de archivos requieren Tauri v2. Inicia la aplicación con 'bun run tauri dev'."
         />
@@ -118,37 +236,27 @@ export function App() {
     navCounts.all === 0 && activeTypeFilter === 'all';
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-bg-base text-text-primary">
+    <SidebarProvider
+      open={sidebarOpen}
+      onOpenChange={setSidebarOpen}
+      className="h-screen overflow-hidden"
+    >
       <Sidebar
         navCounts={navCounts}
         shelves={shelves}
         tags={tags}
-        onCreateShelf={(parentId = null) =>
-          setShelfDialogState({
-            open: true,
-            editingShelf: null,
-            parentId,
-          })
-        }
-        onEditShelf={(shelf) =>
-          setShelfDialogState({
-            open: true,
-            editingShelf: shelf,
-            parentId: shelf.parent_id,
-          })
-        }
-        onCreateTag={() =>
-          setTagDialogState({ open: true, editingTag: null })
-        }
-        onEditTag={(tag) =>
-          setTagDialogState({ open: true, editingTag: tag })
-        }
+        onCreateShelf={handleCreateShelf}
+        onEditShelf={handleEditShelf}
+        onCreateTag={handleCreateTag}
+        onEditTag={handleEditTag}
+        onPreloadCommandPalette={preloadCommandPalette}
       />
 
-      <main className="bg-linen-surface flex min-w-0 flex-1 flex-col overflow-hidden">
+      <SidebarInset className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden bg-background">
         <LibraryHeader
           segments={heading.segments}
           showViewControls={!isHighlightsView}
+          onPreloadCommandPalette={preloadCommandPalette}
         />
 
         {!isHighlightsView ? (
@@ -161,51 +269,46 @@ export function App() {
 
         <div className="scrollbar-subtle flex-1 overflow-y-auto">
           {isHighlightsView ? (
-            <HighlightsView onOpenItem={setSelectedItemId} />
+            <Suspense fallback={LIBRARY_LOADING_SKELETON}>
+              <LazyHighlightsView onOpenItem={setSelectedItemId} />
+            </Suspense>
           ) : itemsQuery.isLoading ? (
-            <div className="px-6 py-10 font-mono text-xs text-text-muted">
-              Cargando biblioteca...
-            </div>
+            LIBRARY_LOADING_SKELETON
           ) : items.length === 0 ? (
             <div className="px-6 py-16">
               {showEmptyLibraryActions ? (
                 <EmptyState
-                  icon={<Library className="h-5 w-5" />}
+                  icon={<Library className="size-5" />}
                   title="Tu biblioteca local está vacía"
-                  description="En la Fase 3 integraremos la importación de archivos PDF/EPUB desde tu equipo. Mientras tanto, puedes crear tu estructura de estanterías o cargar una colección de ejemplo para explorar la interfaz."
+                  description="En la Fase 3 integraremos la importación de archivos PDF/EPUB desde tu equipo. Mientras tanto, puedes crear tu estructura de estanterías o cargar una colección de ejemplo para explorar el nuevo diseño."
                   actions={
                     <>
-                      <button
+                      <Button
                         type="button"
-                        onClick={() =>
-                          setShelfDialogState({
-                            open: true,
-                            editingShelf: null,
-                            parentId: null,
-                          })
-                        }
-                        className="inline-flex items-center gap-1.5 rounded border border-border-strong bg-bg-elevated px-3 py-1.5 font-mono text-xs text-text-primary transition-colors hover:border-accent/60 hover:text-accent"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleCreateShelf(null)}
                       >
-                        <FolderPlus className="h-3.5 w-3.5" />
+                        <FolderPlus className="size-4" />
                         Nueva estantería
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
+                        size="sm"
                         disabled={seedSample.isPending}
                         onClick={() => seedSample.mutate()}
-                        className="inline-flex items-center gap-1.5 rounded border border-accent/50 bg-accent/15 px-3 py-1.5 font-mono text-xs text-accent transition-colors hover:bg-accent/25 disabled:opacity-50"
                       >
-                        <Sparkles className="h-3.5 w-3.5" />
+                        <Sparkles className="size-4" />
                         {seedSample.isPending
                           ? 'Cargando ejemplo...'
                           : 'Cargar colección de ejemplo'}
-                      </button>
+                      </Button>
                     </>
                   }
                 />
               ) : (
                 <EmptyState
-                  icon={<Library className="h-5 w-5" />}
+                  icon={<Library className="size-5" />}
                   title="No hay recursos en esta vista"
                   description={
                     activeTypeFilter !== 'all'
@@ -214,21 +317,23 @@ export function App() {
                   }
                   actions={
                     activeTypeFilter !== 'all' ? (
-                      <button
+                      <Button
                         type="button"
+                        variant="outline"
+                        size="sm"
                         onClick={() => setActiveTypeFilter('all')}
-                        className="rounded border border-border-strong bg-bg-elevated px-3 py-1.5 font-mono text-xs text-text-primary transition-colors hover:border-accent/60 hover:text-accent"
                       >
                         Mostrar todos los tipos
-                      </button>
+                      </Button>
                     ) : (
-                      <button
+                      <Button
                         type="button"
+                        variant="outline"
+                        size="sm"
                         onClick={() => navigate('all')}
-                        className="rounded border border-border-strong bg-bg-elevated px-3 py-1.5 font-mono text-xs text-text-primary transition-colors hover:border-accent/60 hover:text-accent"
                       >
                         Volver a All Books
-                      </button>
+                      </Button>
                     )
                   }
                 />
@@ -239,64 +344,67 @@ export function App() {
               items={items}
               shelves={shelves}
               section={activeSection}
-              coverSize={coverSize}
               groupByShelf={groupByShelf}
               onSelectItem={setSelectedItemId}
-              onSelectShelf={(shelfId) =>
-                navigate({ kind: 'shelf', shelfId })
-              }
+              onSelectShelf={handleSelectShelf}
             />
           ) : (
-            <BookListView
-              items={items}
-              shelves={shelves}
-              tags={tags}
-              onSelectItem={setSelectedItemId}
-            />
+            <Suspense fallback={LIBRARY_LOADING_SKELETON}>
+              <LazyBookListView
+                items={items}
+                shelves={shelves}
+                tags={tags}
+                onSelectItem={setSelectedItemId}
+              />
+            </Suspense>
           )}
         </div>
-      </main>
+      </SidebarInset>
 
-      <ItemInspectorModal
-        itemId={selectedItemId}
-        shelves={shelves}
-        tags={tags}
-        onClose={() => setSelectedItemId(null)}
-      />
+      {hasMountedInspector ? (
+        <Suspense fallback={null}>
+          <LazyItemInspectorModal
+            itemId={selectedItemId}
+            shelves={shelves}
+            tags={tags}
+            onClose={handleCloseInspector}
+          />
+        </Suspense>
+      ) : null}
 
-      <ShelfDialog
-        open={shelfDialogState.open}
-        onOpenChange={(open) =>
-          setShelfDialogState((prev) => ({ ...prev, open }))
-        }
-        shelves={shelves}
-        editingShelf={shelfDialogState.editingShelf}
-        initialParentId={shelfDialogState.parentId}
-      />
+      {hasMountedShelfDialog ? (
+        <Suspense fallback={null}>
+          <LazyShelfDialog
+            open={shelfDialogState.open}
+            onOpenChange={handleShelfDialogOpenChange}
+            shelves={shelves}
+            editingShelf={shelfDialogState.editingShelf}
+            initialParentId={shelfDialogState.parentId}
+          />
+        </Suspense>
+      ) : null}
 
-      <TagDialog
-        open={tagDialogState.open}
-        onOpenChange={(open) =>
-          setTagDialogState((prev) => ({ ...prev, open }))
-        }
-        editingTag={tagDialogState.editingTag}
-      />
+      {hasMountedTagDialog ? (
+        <Suspense fallback={null}>
+          <LazyTagDialog
+            open={tagDialogState.open}
+            onOpenChange={handleTagDialogOpenChange}
+            editingTag={tagDialogState.editingTag}
+          />
+        </Suspense>
+      ) : null}
 
-      <CommandPalette
-        shelves={shelves}
-        tags={tags}
-        hasSample={Boolean(hasSampleQuery.data)}
-        onCreateShelf={() =>
-          setShelfDialogState({
-            open: true,
-            editingShelf: null,
-            parentId: null,
-          })
-        }
-        onCreateTag={() =>
-          setTagDialogState({ open: true, editingTag: null })
-        }
-      />
-    </div>
+      {hasMountedPalette ? (
+        <Suspense fallback={null}>
+          <LazyCommandPalette
+            shelves={shelves}
+            tags={tags}
+            hasSample={Boolean(hasSampleQuery.data)}
+            onCreateShelf={handleCreateShelf}
+            onCreateTag={handleCreateTag}
+          />
+        </Suspense>
+      ) : null}
+    </SidebarProvider>
   );
 }

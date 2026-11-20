@@ -1,9 +1,11 @@
 import type { ItemStatus, ItemType, ShelfCategory, SortOption } from '@/types/domain';
 
+const DIACRITICS_REGEX = /[\u0300-\u036f]/g;
+
 export function normalizeForSearch(value: string): string {
   return value
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(DIACRITICS_REGEX, '')
     .toLowerCase()
     .trim();
 }

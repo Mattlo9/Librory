@@ -1,4 +1,4 @@
-import { createItem } from '@/services/bookRepository';
+import { createItem, hasSampleItems } from '@/services/bookRepository';
 import { getDb } from '@/services/db';
 import { assignItemToShelf, createShelf } from '@/services/shelfRepository';
 import { assignTagToItem, createTag } from '@/services/tagRepository';
@@ -10,6 +10,8 @@ import type {
   ShelfCategory,
   Tag,
 } from '@/types/domain';
+
+export { hasSampleItems };
 
 interface SampleItemSpec {
   slug: string;
@@ -65,14 +67,6 @@ async function ensureTag(
   return created;
 }
 
-export async function hasSampleItems(): Promise<boolean> {
-  const db = await getDb();
-  const rows = await db.select<Array<{ count: number }>>(
-    "SELECT COUNT(*) AS count FROM items WHERE file_path LIKE 'sample/%'",
-  );
-  return (rows[0]?.count ?? 0) > 0;
-}
-
 export async function seedSampleLibrary(): Promise<void> {
   if (await hasSampleItems()) {
     return;
@@ -84,17 +78,26 @@ export async function seedSampleLibrary(): Promise<void> {
     db.select<Tag[]>('SELECT * FROM tags'),
   ]);
 
-  const projects = await ensureShelf(existingShelves, 'Projects', null, 'project', 1);
-  const dialogic = await ensureShelf(existingShelves, 'Dialogic Studio', projects.id, 'project', 1);
-  const flowstate = await ensureShelf(existingShelves, 'Flowstate', projects.id, 'project', 2);
+  const [projects, areas, authors, tagLocalFirst, tagArchitecture, tagStrategy, tagEssays] =
+    await Promise.all([
+      ensureShelf(existingShelves, 'Projects', null, 'project', 1),
+      ensureShelf(existingShelves, 'Areas', null, 'area', 2),
+      ensureShelf(existingShelves, 'Authors', null, 'author', 3),
+      ensureTag(existingTags, 'local-first', '#d4a373'),
+      ensureTag(existingTags, 'architecture', '#7d9b76'),
+      ensureTag(existingTags, 'strategy', '#6d8aa6'),
+      ensureTag(existingTags, 'essays', '#b57468'),
+    ]);
 
-  const areas = await ensureShelf(existingShelves, 'Areas', null, 'area', 2);
-  const systems = await ensureShelf(existingShelves, 'Design & Systems', areas.id, 'area', 1);
-  const philosophy = await ensureShelf(existingShelves, 'Philosophy', areas.id, 'area', 2);
-
-  const authors = await ensureShelf(existingShelves, 'Authors', null, 'author', 3);
-  const baldwin = await ensureShelf(existingShelves, 'James Baldwin', authors.id, 'author', 1);
-  const meadows = await ensureShelf(existingShelves, 'Donella Meadows', authors.id, 'author', 2);
+  const [dialogic, flowstate, systems, philosophy, baldwin, meadows] =
+    await Promise.all([
+      ensureShelf(existingShelves, 'Dialogic Studio', projects.id, 'project', 1),
+      ensureShelf(existingShelves, 'Flowstate', projects.id, 'project', 2),
+      ensureShelf(existingShelves, 'Design & Systems', areas.id, 'area', 1),
+      ensureShelf(existingShelves, 'Philosophy', areas.id, 'area', 2),
+      ensureShelf(existingShelves, 'James Baldwin', authors.id, 'author', 1),
+      ensureShelf(existingShelves, 'Donella Meadows', authors.id, 'author', 2),
+    ]);
 
   const shelfLookup = new Map<string, Shelf>([
     ['dialogic', dialogic],
@@ -104,11 +107,6 @@ export async function seedSampleLibrary(): Promise<void> {
     ['baldwin', baldwin],
     ['meadows', meadows],
   ]);
-
-  const tagLocalFirst = await ensureTag(existingTags, 'local-first', '#d4a373');
-  const tagArchitecture = await ensureTag(existingTags, 'architecture', '#7d9b76');
-  const tagStrategy = await ensureTag(existingTags, 'strategy', '#6d8aa6');
-  const tagEssays = await ensureTag(existingTags, 'essays', '#b57468');
 
   const tagLookup = new Map<string, Tag>([
     ['local-first', tagLocalFirst],
@@ -300,28 +298,36 @@ export async function seedSampleLibrary(): Promise<void> {
 
     createdIds.set(spec.slug, item.id);
 
+    const itemOps: Array<Promise<unknown>> = [];
+
     if (spec.openedDaysAgo !== undefined) {
       const openedAt = new Date(
         nowMs - spec.openedDaysAgo * 24 * 60 * 60 * 1000,
       ).toISOString();
-      await db.execute(
-        'UPDATE items SET last_opened_at = $1 WHERE id = $2',
-        [openedAt, item.id],
+      itemOps.push(
+        db.execute('UPDATE items SET last_opened_at = $1 WHERE id = $2', [
+          openedAt,
+          item.id,
+        ]),
       );
     }
 
     for (const shelfKey of spec.shelves) {
       const shelf = shelfLookup.get(shelfKey);
       if (shelf) {
-        await assignItemToShelf(item.id, shelf.id);
+        itemOps.push(assignItemToShelf(item.id, shelf.id));
       }
     }
 
     for (const tagKey of spec.tags) {
       const tag = tagLookup.get(tagKey);
       if (tag) {
-        await assignTagToItem(item.id, tag.id);
+        itemOps.push(assignTagToItem(item.id, tag.id));
       }
+    }
+
+    if (itemOps.length > 0) {
+      await Promise.all(itemOps);
     }
   }
 
@@ -329,38 +335,48 @@ export async function seedSampleLibrary(): Promise<void> {
   const meadowsId = createdIds.get('thinking-in-systems');
   const nowIso = new Date().toISOString();
 
+  const highlightOps: Array<Promise<unknown>> = [];
+
   if (localFirstId) {
-    await db.execute(
-      `INSERT INTO highlights (id, item_id, quote_text, note_markdown, page_number, color, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [
-        crypto.randomUUID(),
-        localFirstId,
-        'In local-first software, the availability of your data does not depend on any server remaining online.',
-        'Principio base de Librory: el disco local y SQLite son la única fuente de verdad.',
-        4,
-        'amber',
-        nowIso,
-        nowIso,
-      ],
+    highlightOps.push(
+      db.execute(
+        `INSERT INTO highlights (id, item_id, quote_text, note_markdown, page_number, color, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          crypto.randomUUID(),
+          localFirstId,
+          'In local-first software, the availability of your data does not depend on any server remaining online.',
+          'Principio base de Librory: el disco local y SQLite son la única fuente de verdad.',
+          4,
+          'amber',
+          nowIso,
+          nowIso,
+        ],
+      ),
     );
   }
 
   if (meadowsId) {
-    await db.execute(
-      `INSERT INTO highlights (id, item_id, quote_text, note_markdown, page_number, color, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [
-        crypto.randomUUID(),
-        meadowsId,
-        'Purposes are deduced from behavior, not from rhetoric or stated goals.',
-        'Observar cómo se navega realmente la biblioteca importa más que la taxonomía teórica.',
-        14,
-        'sage',
-        nowIso,
-        nowIso,
-      ],
+    highlightOps.push(
+      db.execute(
+        `INSERT INTO highlights (id, item_id, quote_text, note_markdown, page_number, color, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          crypto.randomUUID(),
+          meadowsId,
+          'Purposes are deduced from behavior, not from rhetoric or stated goals.',
+          'Observar cómo se navega realmente la biblioteca importa más que la taxonomía teórica.',
+          14,
+          'sage',
+          nowIso,
+          nowIso,
+        ],
+      ),
     );
+  }
+
+  if (highlightOps.length > 0) {
+    await Promise.all(highlightOps);
   }
 }
 

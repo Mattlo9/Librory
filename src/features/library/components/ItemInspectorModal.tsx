@@ -1,14 +1,21 @@
 import { Check, Hash, Plus, Trash2 } from 'lucide-react';
-import { useMemo, useState, type FormEvent } from 'react';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { CoverImage } from '@/components/ui/CoverImage';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { CoverImage } from '@/components/ui/cover-image';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/Dialog';
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
 import { useAssetUrl } from '@/features/library/hooks/useAssetUrl';
 import {
   useDeleteItem,
@@ -20,9 +27,9 @@ import {
   useToggleItemShelf,
   useToggleItemTag,
 } from '@/features/shelves/hooks/useShelvesAndTags';
-import { cn } from '@/lib/cn';
 import { getShelfBreadcrumb } from '@/lib/shelfTree';
 import { ITEM_STATUS_LABELS, ITEM_TYPE_SINGULAR } from '@/lib/text';
+import { cn } from '@/lib/utils';
 import {
   ITEM_STATUSES,
   ITEM_TYPES,
@@ -39,6 +46,22 @@ interface ItemInspectorModalProps {
   tags: TagWithCount[];
   onClose: () => void;
 }
+
+const INSPECTOR_SKELETON = (
+  <div role="status" aria-label="Cargando ficha" className="space-y-4 px-5 pb-6">
+    <div className="flex gap-4 rounded-xl border border-border bg-secondary/40 p-3.5">
+      <Skeleton className="h-28 w-20 shrink-0 rounded-md" />
+      <div className="flex-1 space-y-2 py-1">
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-5 w-4/5" />
+        <Skeleton className="h-3 w-2/3" />
+      </div>
+    </div>
+    <Skeleton className="h-9 w-full" />
+    <Skeleton className="h-9 w-full" />
+    <Skeleton className="h-24 w-full" />
+  </div>
+);
 
 function InspectorBody({
   item,
@@ -64,13 +87,26 @@ function InspectorBody({
   const [status, setStatus] = useState<ItemStatus>(item.status);
   const [notes, setNotes] = useState(item.notes);
   const [newTagName, setNewTagName] = useState('');
+  const [tagError, setTagError] = useState<string | null>(null);
   const [savedNotice, setSavedNotice] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const savedTimerRef = useRef<number | null>(null);
 
-  const shelfById = useMemo(
-    () => new Map(shelves.map((shelf) => [shelf.id, shelf])),
-    [shelves],
-  );
+  useEffect(() => {
+    return () => {
+      if (savedTimerRef.current !== null) {
+        window.clearTimeout(savedTimerRef.current);
+      }
+    };
+  }, []);
+
+  const shelfOptions = useMemo(() => {
+    const shelfById = new Map(shelves.map((shelf) => [shelf.id, shelf]));
+    return shelves.map((shelf) => ({
+      shelf,
+      label: getShelfBreadcrumb(shelf.id, shelfById).join(' / '),
+    }));
+  }, [shelves]);
 
   const assignedShelfIds = useMemo(() => new Set(item.shelf_ids), [item.shelf_ids]);
   const assignedTagIds = useMemo(() => new Set(item.tag_ids), [item.tag_ids]);
@@ -98,25 +134,41 @@ function InspectorBody({
       },
     });
     setSavedNotice(true);
-    setTimeout(() => setSavedNotice(false), 1800);
+    if (savedTimerRef.current !== null) {
+      window.clearTimeout(savedTimerRef.current);
+    }
+    savedTimerRef.current = window.setTimeout(() => {
+      setSavedNotice(false);
+      savedTimerRef.current = null;
+    }, 1800);
   }
 
   async function handleQuickCreateTag() {
     const trimmed = newTagName.trim();
     if (!trimmed) return;
-    const created = await createTag.mutateAsync({ name: trimmed });
-    await toggleTag.mutateAsync({
-      itemId: item.id,
-      tagId: created.id,
-      assigned: false,
-    });
-    setNewTagName('');
+    setTagError(null);
+    try {
+      const created = await createTag.mutateAsync({ name: trimmed });
+      await toggleTag.mutateAsync({
+        itemId: item.id,
+        tagId: created.id,
+        assigned: false,
+      });
+      setNewTagName('');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setTagError(
+        message.toLowerCase().includes('unique')
+          ? `Ya existe una etiqueta llamada "${trimmed}".`
+          : message,
+      );
+    }
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex gap-4">
-        <div className="w-24 shrink-0">
+    <div className="space-y-6 px-5 pb-6">
+      <div className="flex gap-4 rounded-xl border border-border bg-secondary/40 p-3.5">
+        <div className="w-20 shrink-0">
           <CoverImage
             id={item.id}
             title={title || item.title}
@@ -124,66 +176,74 @@ function InspectorBody({
             type={type}
             fileFormat={item.file_format}
             assetUrl={assetUrl}
-            width={96}
           />
         </div>
 
         <div className="min-w-0 flex-1 space-y-2">
-          <div className="flex flex-wrap items-center gap-2 font-mono text-[10.5px] uppercase text-text-muted">
-            <span className="rounded border border-border-subtle bg-bg-base px-1.5 py-0.5 text-text-secondary">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge
+              variant="secondary"
+              className="rounded-md font-mono text-[10px] uppercase"
+            >
               {item.file_format}
-            </span>
+            </Badge>
             {item.page_count > 0 ? (
-              <span>
-                Página {item.current_page} / {item.page_count}
-              </span>
+              <Badge
+                variant="outline"
+                className="rounded-md font-mono text-[10px] tabular-nums text-muted-foreground"
+              >
+                {item.current_page} / {item.page_count} págs
+              </Badge>
             ) : null}
           </div>
-          <p className="break-all font-mono text-[11px] text-text-muted">
+          <p className="line-clamp-2 font-sans text-sm font-semibold tracking-tight text-foreground">
+            {title || item.title}
+          </p>
+          <p className="break-all font-mono text-[10.5px] text-muted-foreground">
             {item.file_path}
           </p>
         </div>
       </div>
 
-      <form onSubmit={(e) => void handleSaveMetadata(e)} className="space-y-3">
-        <div className="space-y-1">
+      <form onSubmit={(e) => void handleSaveMetadata(e)} className="space-y-3.5">
+        <div className="space-y-1.5">
           <label
             htmlFor="inspector-title"
-            className="block font-mono text-[11px] text-text-secondary"
+            className="block text-xs font-medium text-muted-foreground"
           >
             Título
           </label>
-          <input
+          <Input
             id="inspector-title"
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full rounded border border-border-strong bg-bg-base px-3 py-1.5 text-xs text-text-primary focus:border-accent/70 focus:outline-none"
+            className="h-9 text-sm"
           />
         </div>
 
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           <label
             htmlFor="inspector-author"
-            className="block font-mono text-[11px] text-text-secondary"
+            className="block text-xs font-medium text-muted-foreground"
           >
             Autor
           </label>
-          <input
+          <Input
             id="inspector-author"
             type="text"
             value={author}
             onChange={(e) => setAuthor(e.target.value)}
             placeholder="Sin autor"
-            className="w-full rounded border border-border-strong bg-bg-base px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-accent/70 focus:outline-none"
+            className="h-9 text-sm"
           />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <label
               htmlFor="inspector-type"
-              className="block font-mono text-[11px] text-text-secondary"
+              className="block text-xs font-medium text-muted-foreground"
             >
               Tipo de recurso
             </label>
@@ -191,7 +251,7 @@ function InspectorBody({
               id="inspector-type"
               value={type}
               onChange={(e) => setType(e.target.value as ItemType)}
-              className="w-full rounded border border-border-strong bg-bg-base px-2.5 py-1.5 text-xs text-text-primary focus:border-accent/70 focus:outline-none"
+              className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
             >
               {ITEM_TYPES.map((t) => (
                 <option key={t} value={t}>
@@ -201,10 +261,10 @@ function InspectorBody({
             </select>
           </div>
 
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <label
               htmlFor="inspector-status"
-              className="block font-mono text-[11px] text-text-secondary"
+              className="block text-xs font-medium text-muted-foreground"
             >
               Estado
             </label>
@@ -212,7 +272,7 @@ function InspectorBody({
               id="inspector-status"
               value={status}
               onChange={(e) => setStatus(e.target.value as ItemStatus)}
-              className="w-full rounded border border-border-strong bg-bg-base px-2.5 py-1.5 text-xs text-text-primary focus:border-accent/70 focus:outline-none"
+              className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
             >
               {ITEM_STATUSES.map((st) => (
                 <option key={st} value={st}>
@@ -223,67 +283,78 @@ function InspectorBody({
           </div>
         </div>
 
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           <label
             htmlFor="inspector-notes"
-            className="block font-mono text-[11px] text-text-secondary"
+            className="block text-xs font-medium text-muted-foreground"
           >
             Notas (indexadas en FTS5)
           </label>
-          <textarea
+          <Textarea
             id="inspector-notes"
             rows={3}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Resumen breve, ideas clave o contexto..."
-            className="w-full resize-none rounded border border-border-strong bg-bg-base px-3 py-2 text-xs text-text-primary placeholder:text-text-muted focus:border-accent/70 focus:outline-none"
+            className="resize-none text-sm"
           />
         </div>
 
         <div className="flex items-center justify-between pt-1">
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={() => setConfirmDeleteOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded border border-border-subtle px-2.5 py-1 font-mono text-[11px] text-text-muted transition-colors hover:border-status-error/50 hover:text-status-error"
+            className="text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
           >
-            <Trash2 className="h-3 w-3" />
+            <Trash2 className="size-3.5" />
             Eliminar
-          </button>
+          </Button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             {savedNotice ? (
-              <span className="font-mono text-[11px] text-status-ok">
+              <span
+                role="status"
+                aria-live="polite"
+                className="font-mono text-xs text-emerald-400"
+              >
                 Guardado
               </span>
             ) : null}
-            <button
+            <Button
               type="submit"
+              size="sm"
               disabled={!hasMetadataChanges || !title.trim() || updateItem.isPending}
-              className="rounded border border-accent/50 bg-accent/15 px-3 py-1 font-mono text-xs text-accent transition-colors hover:bg-accent/25 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {updateItem.isPending ? 'Guardando...' : 'Guardar metadatos'}
-            </button>
+            </Button>
           </div>
         </div>
       </form>
 
-      <div className="space-y-2 border-t border-border-subtle pt-4">
-        <h3 className="font-mono text-[11px] uppercase tracking-wider text-text-muted">
-          Estanterías ({assignedShelfIds.size})
-        </h3>
-        {shelves.length === 0 ? (
-          <p className="text-xs text-text-muted">
+      <Separator />
+
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            Estanterías ({assignedShelfIds.size})
+          </h3>
+        </div>
+
+        {shelfOptions.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
             Crea una estantería en la barra lateral para organizar este recurso.
           </p>
         ) : (
-          <div className="scrollbar-subtle grid max-h-36 grid-cols-1 gap-1 overflow-y-auto pr-1 sm:grid-cols-2">
-            {shelves.map((shelf) => {
+          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+            {shelfOptions.map(({ shelf, label }) => {
               const checked = assignedShelfIds.has(shelf.id);
-              const label = getShelfBreadcrumb(shelf.id, shelfById).join(' › ');
               return (
                 <button
                   key={shelf.id}
                   type="button"
+                  aria-pressed={checked}
                   onClick={() =>
                     toggleShelf.mutate({
                       itemId: item.id,
@@ -292,21 +363,22 @@ function InspectorBody({
                     })
                   }
                   className={cn(
-                    'flex items-center gap-2 rounded border px-2.5 py-1.5 text-left font-mono text-[11px] transition-colors',
+                    'flex items-center gap-2 rounded-md border px-2.5 py-2 text-left text-xs outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
                     checked
-                      ? 'border-accent/50 bg-accent/10 text-text-primary'
-                      : 'border-border-subtle bg-bg-base/60 text-text-secondary hover:border-border-strong hover:text-text-primary',
+                      ? 'border-accent-brand/50 bg-accent-brand/10 text-foreground'
+                      : 'border-border bg-secondary/40 text-muted-foreground hover:bg-secondary hover:text-foreground',
                   )}
                 >
                   <span
+                    aria-hidden="true"
                     className={cn(
-                      'flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm border',
+                      'flex size-3.5 shrink-0 items-center justify-center rounded-sm border',
                       checked
-                        ? 'border-accent bg-accent text-bg-base'
-                        : 'border-border-strong',
+                        ? 'border-accent-brand bg-accent-brand text-primary-foreground'
+                        : 'border-border',
                     )}
                   >
-                    {checked ? <Check className="h-2.5 w-2.5" /> : null}
+                    {checked ? <Check className="size-2.5" /> : null}
                   </span>
                   <span className="truncate">{label}</span>
                 </button>
@@ -316,16 +388,24 @@ function InspectorBody({
         )}
       </div>
 
-      <div className="space-y-2 border-t border-border-subtle pt-4">
+      <Separator />
+
+      <div className="space-y-2.5">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="font-mono text-[11px] uppercase tracking-wider text-text-muted">
+          <h3 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
             Etiquetas ({assignedTagIds.size})
           </h3>
-          <div className="flex items-center gap-1">
-            <input
+          <div className="flex items-center gap-1.5">
+            <Input
               type="text"
+              aria-label="Nombre de nueva etiqueta"
+              aria-invalid={Boolean(tagError)}
+              aria-describedby={tagError ? 'inspector-tag-error' : undefined}
               value={newTagName}
-              onChange={(e) => setNewTagName(e.target.value)}
+              onChange={(e) => {
+                setNewTagName(e.target.value);
+                if (tagError) setTagError(null);
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
@@ -333,19 +413,26 @@ function InspectorBody({
                 }
               }}
               placeholder="Nueva etiqueta..."
-              className="w-32 rounded border border-border-subtle bg-bg-base px-2 py-0.5 font-mono text-[11px] text-text-primary placeholder:text-text-muted focus:border-accent/60 focus:outline-none"
+              className="h-7 w-36 text-xs"
             />
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="icon-xs"
               aria-label="Añadir etiqueta"
               disabled={!newTagName.trim() || createTag.isPending}
               onClick={() => void handleQuickCreateTag()}
-              className="rounded border border-border-subtle bg-bg-base p-1 text-text-secondary hover:border-border-strong hover:text-text-primary disabled:opacity-40"
             >
-              <Plus className="h-3 w-3" />
-            </button>
+              <Plus className="size-3.5" />
+            </Button>
           </div>
         </div>
+
+        {tagError ? (
+          <p id="inspector-tag-error" role="alert" className="text-xs text-destructive">
+            {tagError}
+          </p>
+        ) : null}
 
         <div className="flex flex-wrap gap-1.5">
           {tags.map((tag) => {
@@ -354,6 +441,7 @@ function InspectorBody({
               <button
                 key={tag.id}
                 type="button"
+                aria-pressed={active}
                 onClick={() =>
                   toggleTag.mutate({
                     itemId: item.id,
@@ -362,16 +450,17 @@ function InspectorBody({
                   })
                 }
                 className={cn(
-                  'inline-flex items-center gap-1 rounded border px-2 py-0.5 font-mono text-[11px] transition-colors',
+                  'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
                   active
-                    ? 'border-accent/55 bg-accent/15 text-text-primary'
-                    : 'border-border-subtle bg-bg-base/70 text-text-secondary hover:border-border-strong hover:text-text-primary',
+                    ? 'border-accent-brand/55 bg-accent-brand/15 text-foreground'
+                    : 'border-border bg-secondary/40 text-muted-foreground hover:bg-secondary hover:text-foreground',
                 )}
               >
-                <Hash className="h-2.5 w-2.5 text-text-muted" />
+                <Hash className="size-3 text-muted-foreground" />
                 {tag.color ? (
                   <span
-                    className="h-1.5 w-1.5 rounded-full"
+                    aria-hidden="true"
+                    className="size-1.5 rounded-full"
                     style={{ backgroundColor: tag.color }}
                   />
                 ) : null}
@@ -380,7 +469,9 @@ function InspectorBody({
             );
           })}
           {tags.length === 0 ? (
-            <span className="text-xs text-text-muted">Sin etiquetas creadas aún.</span>
+            <span className="text-xs text-muted-foreground">
+              Sin etiquetas creadas aún.
+            </span>
           ) : null}
         </div>
       </div>
@@ -401,6 +492,9 @@ function InspectorBody({
   );
 }
 
+/**
+ * Right-side slide-over inspector built on ShadcnSpace sheet-02 primitives.
+ */
 export function ItemInspectorModal({
   itemId,
   shelves,
@@ -410,38 +504,43 @@ export function ItemInspectorModal({
   const detailQuery = useItemDetail(itemId);
 
   return (
-    <Dialog
+    <Sheet
       open={Boolean(itemId)}
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
     >
-      <DialogContent className="scrollbar-subtle max-h-[88vh] w-[min(94vw,600px)] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Ficha del recurso</DialogTitle>
-          <DialogDescription>
-            Edita metadatos y asigna estanterías o etiquetas sin mover el archivo.
-          </DialogDescription>
-        </DialogHeader>
+      <SheetContent
+        side="right"
+        className="w-full gap-0 border-l border-border bg-card p-0 sm:max-w-[460px]"
+      >
+        <ScrollArea className="h-full">
+          <SheetHeader className="px-5 pt-5 pb-4">
+            <SheetTitle className="text-base font-semibold tracking-tight">
+              Ficha del recurso
+            </SheetTitle>
+            <SheetDescription className="text-xs">
+              Edita metadatos y asigna estanterías o etiquetas sin mover el archivo.
+            </SheetDescription>
+          </SheetHeader>
 
-        {detailQuery.isLoading ? (
-          <p className="py-8 text-center font-mono text-xs text-text-muted">
-            Cargando ficha...
-          </p>
-        ) : detailQuery.data ? (
-          <InspectorBody
-            key={detailQuery.data.id}
-            item={detailQuery.data}
-            shelves={shelves}
-            tags={tags}
-            onClose={onClose}
-          />
-        ) : (
-          <p className="py-8 text-center font-mono text-xs text-text-muted">
-            No se encontró el recurso seleccionado.
-          </p>
-        )}
-      </DialogContent>
-    </Dialog>
+          {detailQuery.isLoading ? (
+            INSPECTOR_SKELETON
+          ) : detailQuery.data ? (
+            <InspectorBody
+              key={detailQuery.data.id}
+              item={detailQuery.data}
+              shelves={shelves}
+              tags={tags}
+              onClose={onClose}
+            />
+          ) : (
+            <p className="px-5 py-10 text-center text-xs text-muted-foreground">
+              No se encontró el recurso seleccionado.
+            </p>
+          )}
+        </ScrollArea>
+      </SheetContent>
+    </Sheet>
   );
 }

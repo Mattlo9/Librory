@@ -1,37 +1,51 @@
 import {
   ArrowUpDown,
   BookMarked,
-  Check,
   ChevronLeft,
   ChevronRight,
   LayoutGrid,
   List,
   Search,
 } from 'lucide-react';
+import { memo } from 'react';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/DropdownMenu';
-import { Slider } from '@/components/ui/Slider';
-import { cn } from '@/lib/cn';
+} from '@/components/ui/dropdown-menu';
+import { Kbd, KbdGroup } from '@/components/ui/kbd';
+import { Separator } from '@/components/ui/separator';
+import { SidebarTrigger } from '@/components/ui/sidebar';
+import { Slider } from '@/components/ui/slider';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { SORT_OPTION_LABELS } from '@/lib/text';
+import { cn } from '@/lib/utils';
 import { useUiStore } from '@/store/uiStore';
-import type { SortOption } from '@/types/domain';
+import type { SortOption, ViewMode } from '@/types/domain';
 
 interface LibraryHeaderProps {
   segments: string[];
   showViewControls: boolean;
+  onPreloadCommandPalette?: () => void;
 }
 
 const SORT_OPTIONS: SortOption[] = ['created_desc', 'title_asc', 'author_asc'];
 
-export function LibraryHeader({
+export const LibraryHeader = memo(function LibraryHeader({
   segments,
   showViewControls,
+  onPreloadCommandPalette,
 }: LibraryHeaderProps) {
   const historyIndex = useUiStore((s) => s.historyIndex);
   const historyLength = useUiStore((s) => s.history.length);
@@ -49,157 +63,199 @@ export function LibraryHeader({
 
   const canGoBack = historyIndex > 0;
   const canGoForward = historyIndex < historyLength - 1;
+  const sliderDisabled = viewMode !== 'grid';
 
   return (
-    <header className="px-6 pb-2 pt-3">
-      <div className="mb-1.5 flex items-center gap-1">
-        <button
-          type="button"
-          aria-label="Atrás"
-          disabled={!canGoBack}
-          onClick={goBack}
-          className="rounded p-1 text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary disabled:pointer-events-none disabled:opacity-30"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          aria-label="Adelante"
-          disabled={!canGoForward}
-          onClick={goForward}
-          className="rounded p-1 text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary disabled:pointer-events-none disabled:opacity-30"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </button>
-      </div>
+    <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border bg-background/90 px-5 backdrop-blur-sm">
+      <div className="flex min-w-0 items-center gap-2">
+        <SidebarTrigger className="size-8 text-muted-foreground hover:text-foreground" />
+        <Separator orientation="vertical" className="h-4" />
 
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="flex min-w-0 flex-wrap items-center gap-2 font-mono text-[21px] font-medium tracking-tight text-text-primary">
+        <div className="flex items-center gap-0.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Atrás"
+            disabled={!canGoBack}
+            onClick={goBack}
+            className="size-7 text-muted-foreground"
+          >
+            <ChevronLeft className="size-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Adelante"
+            disabled={!canGoForward}
+            onClick={goForward}
+            className="size-7 text-muted-foreground"
+          >
+            <ChevronRight className="size-4" />
+          </Button>
+        </div>
+
+        <h1 className="ml-1 flex min-w-0 items-center gap-1.5 font-sans text-[15px] font-semibold tracking-[-0.02em] text-foreground">
           {segments.map((segment, index) => (
-            <span key={`${segment}-${index}`} className="flex items-center gap-2">
+            <span
+              key={`${segment}-${index}`}
+              className="flex min-w-0 items-center gap-1.5"
+            >
               {index > 0 ? (
-                <ChevronRight className="h-4 w-4 text-text-muted" />
+                <span aria-hidden="true" className="text-muted-foreground/60">
+                  /
+                </span>
               ) : null}
-              <span className="truncate">{segment}</span>
+              <span
+                className={cn(
+                  'truncate',
+                  index < segments.length - 1 && 'font-normal text-muted-foreground',
+                )}
+              >
+                {segment}
+              </span>
             </span>
           ))}
         </h1>
+      </div>
 
-        <div className="flex items-center gap-3">
-          {showViewControls ? (
-            <>
-              <div
-                className={cn(
-                  'hidden items-center gap-2 sm:flex',
-                  viewMode !== 'grid' && 'pointer-events-none opacity-35',
-                )}
-                title={`Tamaño de portada: ${coverSize}px`}
-              >
-                <BookMarked className="h-3 w-3 text-text-muted" />
-                <Slider
-                  aria-label="Tamaño de portadas"
-                  value={[coverSize]}
-                  min={110}
-                  max={240}
-                  step={4}
-                  onValueChange={(values) => {
-                    const next = values[0];
-                    if (typeof next === 'number') {
-                      setCoverSize(next);
-                    }
-                  }}
-                />
-                <BookMarked className="h-4 w-4 text-text-secondary" />
-              </div>
-
-              <div
-                role="group"
-                aria-label="Modo de vista"
-                className="flex items-center rounded border border-border-subtle bg-bg-elevated/70 p-0.5"
-              >
-                <button
-                  type="button"
-                  aria-label="Vista cuadrícula"
-                  aria-pressed={viewMode === 'grid'}
-                  onClick={() => setViewMode('grid')}
+      <div className="flex shrink-0 items-center gap-2.5">
+        {showViewControls ? (
+          <>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div
                   className={cn(
-                    'rounded p-1 transition-colors',
-                    viewMode === 'grid'
-                      ? 'bg-bg-active text-text-primary'
-                      : 'text-text-muted hover:text-text-primary',
+                    'hidden items-center gap-2 rounded-md border border-border/70 bg-secondary/40 px-2.5 py-1 sm:flex',
+                    sliderDisabled && 'opacity-40',
                   )}
                 >
-                  <LayoutGrid className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  aria-label="Vista lista"
-                  aria-pressed={viewMode === 'list'}
-                  onClick={() => setViewMode('list')}
-                  className={cn(
-                    'rounded p-1 transition-colors',
-                    viewMode === 'list'
-                      ? 'bg-bg-active text-text-primary'
-                      : 'text-text-muted hover:text-text-primary',
-                  )}
-                >
-                  <List className="h-3.5 w-3.5" />
-                </button>
-              </div>
+                  <BookMarked className="size-3 text-muted-foreground" />
+                  <Slider
+                    aria-label="Tamaño de portadas"
+                    disabled={sliderDisabled}
+                    value={[coverSize]}
+                    min={110}
+                    max={240}
+                    step={4}
+                    onValueChange={(values) => {
+                      const next = values[0];
+                      if (typeof next === 'number') {
+                        setCoverSize(next);
+                      }
+                    }}
+                    className="w-24 [&_[data-slot=slider-range]]:bg-accent-brand [&_[data-slot=slider-thumb]]:size-3 [&_[data-slot=slider-thumb]]:border-accent-brand"
+                  />
+                  <span
+                    aria-hidden="true"
+                    className="w-8 text-right font-mono text-[10.5px] tabular-nums text-muted-foreground"
+                  >
+                    {coverSize}
+                  </span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {sliderDisabled
+                  ? 'Disponible en vista cuadrícula'
+                  : `Tamaño de portadas (${coverSize}px)`}
+              </TooltipContent>
+            </Tooltip>
 
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="Ordenar y agrupar"
-                    className="rounded border border-border-subtle bg-bg-elevated/70 p-1.5 text-text-secondary transition-colors hover:border-border-strong hover:text-text-primary"
-                  >
-                    <ArrowUpDown className="h-3.5 w-3.5" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-52">
-                  <DropdownMenuLabel>Visualización</DropdownMenuLabel>
-                  <DropdownMenuItem
-                    onSelect={() => setGroupByShelf(!groupByShelf)}
-                    className="justify-between"
-                  >
-                    <span>Agrupar por estanterías</span>
-                    {groupByShelf ? (
-                      <Check className="h-3.5 w-3.5 text-accent" />
-                    ) : null}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel>Ordenar por</DropdownMenuLabel>
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              size="sm"
+              spacing={0}
+              value={viewMode}
+              onValueChange={(value) => {
+                if (value) setViewMode(value as ViewMode);
+              }}
+              aria-label="Modo de vista"
+            >
+              <ToggleGroupItem
+                value="grid"
+                aria-label="Vista cuadrícula"
+                className="px-2.5"
+              >
+                <LayoutGrid className="size-3.5" />
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="list"
+                aria-label="Vista lista"
+                className="px-2.5"
+              >
+                <List className="size-3.5" />
+              </ToggleGroupItem>
+            </ToggleGroup>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-sm"
+                  aria-label="Ordenar y agrupar"
+                >
+                  <ArrowUpDown className="size-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground">
+                  Visualización
+                </DropdownMenuLabel>
+                <DropdownMenuCheckboxItem
+                  checked={groupByShelf}
+                  onCheckedChange={(checked) => setGroupByShelf(checked === true)}
+                  className="text-xs"
+                >
+                  Agrupar por estanterías
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground">
+                  Ordenar por
+                </DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={sortBy}
+                  onValueChange={(value) => setSortBy(value as SortOption)}
+                >
                   {SORT_OPTIONS.map((option) => (
-                    <DropdownMenuItem
+                    <DropdownMenuRadioItem
                       key={option}
-                      onSelect={() => setSortBy(option)}
-                      className="justify-between"
+                      value={option}
+                      className="text-xs"
                     >
-                      <span>{SORT_OPTION_LABELS[option]}</span>
-                      {sortBy === option ? (
-                        <Check className="h-3.5 w-3.5 text-accent" />
-                      ) : null}
-                    </DropdownMenuItem>
+                      {SORT_OPTION_LABELS[option]}
+                    </DropdownMenuRadioItem>
                   ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </>
-          ) : null}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        ) : null}
 
-          <button
-            type="button"
-            onClick={() => setCommandPaletteOpen(true)}
-            className="flex items-center gap-2 rounded border border-border-subtle bg-bg-elevated/80 px-2.5 py-1 font-mono text-[11px] text-text-secondary transition-colors hover:border-border-strong hover:text-text-primary"
-          >
-            <Search className="h-3.5 w-3.5 text-text-muted" />
-            <span className="hidden sm:inline">Buscar</span>
-            <kbd className="rounded border border-border-subtle bg-bg-base px-1 py-0.5 text-[10px] text-text-muted">
-              Ctrl+K
-            </kbd>
-          </button>
-        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          aria-keyshortcuts="Control+K Meta+K"
+          onMouseEnter={onPreloadCommandPalette}
+          onFocus={onPreloadCommandPalette}
+          onClick={() => setCommandPaletteOpen(true)}
+          className="h-8 gap-2 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <Search className="size-3.5" />
+          <span className="hidden md:inline">Buscar</span>
+          <KbdGroup aria-hidden="true">
+            <Kbd className="h-4 min-w-4 border border-border bg-secondary px-1 font-mono text-[10px]">
+              Ctrl
+            </Kbd>
+            <Kbd className="h-4 min-w-4 border border-border bg-secondary px-1 font-mono text-[10px]">
+              K
+            </Kbd>
+          </KbdGroup>
+        </Button>
       </div>
     </header>
   );
-}
+});

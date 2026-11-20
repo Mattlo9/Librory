@@ -8,11 +8,24 @@ export const BOOKS_DIR = 'books';
 export const COVERS_DIR = 'covers';
 export const DB_FILENAME = 'library.db';
 
+let appDataDirPromise: Promise<string> | null = null;
+
+function getCachedAppDataDir(): Promise<string> {
+  if (!appDataDirPromise) {
+    appDataDirPromise = appDataDir().catch((error: unknown) => {
+      appDataDirPromise = null;
+      throw error;
+    });
+  }
+  return appDataDirPromise;
+}
+
 async function ensureAppDataSubdir(subdir: string): Promise<boolean> {
   const present = await exists(subdir, { baseDir: BaseDirectory.AppData });
-  if (!present) {
-    await mkdir(subdir, { baseDir: BaseDirectory.AppData, recursive: true });
+  if (present) {
+    return true;
   }
+  await mkdir(subdir, { baseDir: BaseDirectory.AppData, recursive: true });
   return exists(subdir, { baseDir: BaseDirectory.AppData });
 }
 
@@ -24,7 +37,7 @@ export async function ensureStorageDirectories(): Promise<StorageDiagnostics> {
     throw new Error('El sistema de archivos local solo está disponible dentro de Tauri.');
   }
 
-  const root = await appDataDir();
+  const root = await getCachedAppDataDir();
   const [booksReady, coversReady, booksPath, coversPath, dbExpectedPath] =
     await Promise.all([
       ensureAppDataSubdir(BOOKS_DIR),
@@ -48,7 +61,7 @@ export async function ensureStorageDirectories(): Promise<StorageDiagnostics> {
  * Resolves a stored relative path (e.g. "books/id.pdf") to an absolute OS path inside appDataDir.
  */
 export async function getAbsoluteStoragePath(relativePath: string): Promise<string> {
-  const root = await appDataDir();
+  const root = await getCachedAppDataDir();
   const segments = relativePath.split(/[\\/]+/).filter(Boolean);
   return join(root, ...segments);
 }
