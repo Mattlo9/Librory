@@ -1,9 +1,11 @@
 import { FolderPlus, Library, Sparkles, Terminal, Upload } from 'lucide-react';
 import { lazy, Suspense, useCallback, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { EmptyState } from '@/components/ui/empty-state';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
+import type { BookItemActions } from '@/features/library/components/BookItemMenu';
 import { BookShelfGrid } from '@/features/library/components/BookShelfGrid';
 import { ImportDropOverlay } from '@/features/library/components/ImportDropOverlay';
 import { ImportStatusBanner } from '@/features/library/components/ImportStatusBanner';
@@ -12,17 +14,21 @@ import { TypeFilterBar } from '@/features/library/components/TypeFilterBar';
 import { useGlobalShortcuts } from '@/features/library/hooks/useGlobalShortcuts';
 import { useImportBooks } from '@/features/library/hooks/useImportBooks';
 import {
+  useDeleteItem,
   useEnsureStorageDirectories,
   useHasSampleItems,
   useIsTauriRuntime,
   useLibraryItems,
   useNavigationCounts,
+  useOpenBookExternally,
   useSeedSampleLibrary,
   useTypeCounts,
+  useUpdateItem,
 } from '@/features/library/hooks/useLibraryData';
 import { getSectionHeading } from '@/features/library/lib/libraryGrouping';
 import { Sidebar } from '@/features/shelves/components/Sidebar';
 import { useShelves, useTags } from '@/features/shelves/hooks/useShelvesAndTags';
+import { useThemeSync } from '@/hooks/useTheme';
 import { useUiStore } from '@/store/uiStore';
 import type {
   ItemType,
@@ -123,6 +129,7 @@ const LIBRARY_LOADING_SKELETON = (
 );
 
 export function App() {
+  useThemeSync();
   const tauriActive = useIsTauriRuntime();
 
   const activeSection = useUiStore((s) => s.activeSection);
@@ -151,6 +158,8 @@ export function App() {
     open: boolean;
     editingTag: TagWithCount | null;
   }>({ open: false, editingTag: null });
+  const [itemPendingDelete, setItemPendingDelete] =
+    useState<LibraryItemWithRelations | null>(null);
 
   // Latch mount state on first activation so overlays split out of initial load
   // while keeping smooth close transitions after first open.
@@ -190,6 +199,34 @@ export function App() {
   const navCountsQuery = useNavigationCounts();
   const hasSampleQuery = useHasSampleItems();
   const seedSample = useSeedSampleLibrary();
+  const updateItem = useUpdateItem();
+  const deleteItem = useDeleteItem();
+  const openBookExternally = useOpenBookExternally();
+
+  const updateItemMutate = updateItem.mutate;
+  const openBookExternallyMutateAsync = openBookExternally.mutateAsync;
+
+  const bookActions = useMemo<BookItemActions>(
+    () => ({
+      onSelect: setSelectedItemId,
+      onOpenReader: openReader,
+      onOpenExternally: (item) => {
+        void openBookExternallyMutateAsync(item);
+      },
+      onChangeStatus: (item, status) => {
+        updateItemMutate({ id: item.id, patch: { status } });
+      },
+      onRequestDelete: (item) => {
+        setItemPendingDelete(item);
+      },
+    }),
+    [
+      openBookExternallyMutateAsync,
+      openReader,
+      setSelectedItemId,
+      updateItemMutate,
+    ],
+  );
 
   const shelves = shelvesQuery.data ?? EMPTY_SHELVES;
   const tags = tagsQuery.data ?? EMPTY_TAGS;
@@ -407,9 +444,8 @@ export function App() {
                   shelves={shelves}
                   section={activeSection}
                   groupByShelf={groupByShelf}
-                  onSelectItem={setSelectedItemId}
+                  bookActions={bookActions}
                   onSelectShelf={handleSelectShelf}
-                  onOpenReader={openReader}
                 />
               ) : (
                 <Suspense fallback={LIBRARY_LOADING_SKELETON}>
@@ -417,8 +453,7 @@ export function App() {
                     items={items}
                     shelves={shelves}
                     tags={tags}
-                    onSelectItem={setSelectedItemId}
-                    onOpenReader={openReader}
+                    bookActions={bookActions}
                   />
                 </Suspense>
               )}
@@ -482,6 +517,31 @@ export function App() {
           />
         </Suspense>
       ) : null}
+
+      <ConfirmDialog
+        open={Boolean(itemPendingDelete)}
+        onOpenChange={(open) => {
+          if (!open && !deleteItem.isPending) {
+            setItemPendingDelete(null);
+          }
+        }}
+        title="Eliminar recurso"
+        description={
+          itemPendingDelete
+            ? `Se eliminará "${itemPendingDelete.title}" de la biblioteca local y del índice de búsqueda.`
+            : ''
+        }
+        isPending={deleteItem.isPending}
+        onConfirm={async () => {
+          if (!itemPendingDelete) return;
+          const deletedId = itemPendingDelete.id;
+          await deleteItem.mutateAsync(deletedId);
+          setItemPendingDelete(null);
+          if (selectedItemId === deletedId) {
+            setSelectedItemId(null);
+          }
+        }}
+      />
     </>
   );
 }

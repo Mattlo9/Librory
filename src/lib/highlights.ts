@@ -29,9 +29,12 @@ export const HIGHLIGHT_HEX: Record<HighlightColor, string> = {
 };
 
 export const HIGHLIGHT_SOFT_BG_CLASS: Record<HighlightColor, string> = {
-  amber: 'border-amber-400/35 bg-amber-400/15 text-amber-300',
-  sage: 'border-emerald-400/35 bg-emerald-400/15 text-emerald-300',
-  clay: 'border-rose-400/35 bg-rose-400/15 text-rose-300',
+  amber:
+    'border-amber-500/35 bg-amber-500/12 text-amber-700 dark:border-amber-400/35 dark:bg-amber-400/15 dark:text-amber-300',
+  sage:
+    'border-emerald-500/35 bg-emerald-500/12 text-emerald-700 dark:border-emerald-400/35 dark:bg-emerald-400/15 dark:text-emerald-300',
+  clay:
+    'border-rose-500/35 bg-rose-500/12 text-rose-700 dark:border-rose-400/35 dark:bg-rose-400/15 dark:text-rose-300',
   slate: 'border-accent-brand/40 bg-accent-brand/15 text-accent-brand',
 };
 

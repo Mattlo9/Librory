@@ -174,7 +174,7 @@ export const TypographicCover = memo(function TypographicCover({
     return (
       <div
         className={cn(
-          'relative flex h-full w-full flex-col justify-between overflow-hidden rounded-md bg-[#16161b] text-foreground ring-1 ring-inset ring-white/10',
+          'relative flex h-full w-full flex-col justify-between overflow-hidden rounded-md bg-[#16161b] text-zinc-100 ring-1 ring-inset ring-white/10',
           className,
         )}
         style={{ padding: compact ? 4 : STANDARD_PADDING }}
@@ -182,7 +182,7 @@ export const TypographicCover = memo(function TypographicCover({
         <div className="space-y-2">
           <div className="h-[2px] w-7 rounded-full bg-accent-brand" />
           {!compact ? (
-            <span className="block font-mono text-[8px] uppercase tracking-[0.14em] text-muted-foreground">
+            <span className="block font-mono text-[8px] uppercase tracking-[0.14em] text-zinc-400">
               SUMMARY · {fileFormat}
             </span>
           ) : null}
@@ -211,13 +211,13 @@ export const TypographicCover = memo(function TypographicCover({
     return (
       <div
         className={cn(
-          'relative flex h-full w-full flex-col justify-between overflow-hidden rounded-md bg-[#131318] text-foreground ring-1 ring-inset ring-white/10',
+          'relative flex h-full w-full flex-col justify-between overflow-hidden rounded-md bg-[#131318] text-zinc-100 ring-1 ring-inset ring-white/10',
           className,
         )}
         style={{ padding: compact ? 4 : STANDARD_PADDING }}
       >
         {!compact ? (
-          <span className="w-fit rounded border border-border bg-background/80 px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-wider text-muted-foreground">
+          <span className="w-fit rounded border border-white/15 bg-black/30 px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-wider text-zinc-300">
             {fileFormat}
           </span>
         ) : null}

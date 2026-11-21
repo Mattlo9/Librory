@@ -2,6 +2,7 @@ import { ChevronRight } from 'lucide-react';
 import { memo, useMemo, type CSSProperties } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { BookCard } from '@/features/library/components/BookCard';
+import type { BookItemActions } from '@/features/library/components/BookItemMenu';
 import {
   groupItemsByShelf,
   shouldGroupByShelf,
@@ -18,9 +19,8 @@ interface BookShelfGridProps {
   shelves: ShelfWithCount[];
   section: NavigationSection;
   groupByShelf: boolean;
-  onSelectItem: (id: string) => void;
+  bookActions: BookItemActions;
   onSelectShelf: (shelfId: string) => void;
-  onOpenReader?: (id: string) => void;
 }
 
 export const BookShelfGrid = memo(function BookShelfGrid({
@@ -28,9 +28,8 @@ export const BookShelfGrid = memo(function BookShelfGrid({
   shelves,
   section,
   groupByShelf,
-  onSelectItem,
+  bookActions,
   onSelectShelf,
-  onOpenReader,
 }: BookShelfGridProps) {
   const coverSize = useUiStore((s) => s.coverSize);
   const isGrouped = shouldGroupByShelf(section, groupByShelf, shelves);
@@ -116,8 +115,7 @@ export const BookShelfGrid = memo(function BookShelfGrid({
               <BookCard
                 key={`${group.key}:${item.id}`}
                 item={item}
-                onSelect={onSelectItem}
-                onOpenReader={onOpenReader}
+                actions={bookActions}
               />
             ))}
           </div>

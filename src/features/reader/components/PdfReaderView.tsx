@@ -8,11 +8,12 @@ import {
   MessageSquarePlus,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ThemeMenu } from '@/components/ui/theme-menu';
 import {
   useCreateHighlight,
   useItemDetail,
@@ -45,24 +46,37 @@ interface PdfReaderViewProps {
   onClose: () => void;
 }
 
-const EMBEDPDF_THEME: NonNullable<ViewerConfig['theme']> = {
-  preference: 'dark',
+const EMBEDPDF_LIGHT_TOKENS = {
+  accent: '#4f46e5',
+  background: '#ffffff',
+  surface: '#f8f8fa',
+  'surface-raised': '#ffffff',
+  text: '#09090b',
+  'text-muted': '#63636e',
+  border: '#e4e4e7',
+  hover: '#ececf0',
+  canvas: '#f1f1f4',
+  tooltip: '#18181b',
+  'tooltip-text': '#fafafa',
+  radius: '0.5rem',
+  font: '"Geist Variable", "Inter", system-ui, -apple-system, sans-serif',
+} as const;
+
+const EMBEDPDF_DARK_TOKENS = {
   accent: '#818cf8',
-  dark: {
-    background: '#09090b',
-    surface: '#0e0e11',
-    'surface-raised': '#121216',
-    text: '#f4f4f5',
-    'text-muted': '#8e8e98',
-    border: '#23232a',
-    hover: '#1c1c22',
-    canvas: '#070709',
-    tooltip: '#18181d',
-    'tooltip-text': '#f4f4f5',
-    radius: '0.5rem',
-    font: '"Geist Variable", "Inter", system-ui, -apple-system, sans-serif',
-  },
-};
+  background: '#09090b',
+  surface: '#0e0e11',
+  'surface-raised': '#121216',
+  text: '#f4f4f5',
+  'text-muted': '#8e8e98',
+  border: '#23232a',
+  hover: '#1c1c22',
+  canvas: '#070709',
+  tooltip: '#18181d',
+  'tooltip-text': '#f4f4f5',
+  radius: '0.5rem',
+  font: '"Geist Variable", "Inter", system-ui, -apple-system, sans-serif',
+} as const;
 
 const EMBEDPDF_FEATURES: NonNullable<ViewerConfig['features']> = {
   'documents.open': false,
@@ -93,6 +107,15 @@ export function PdfReaderView({
     isReadablePdf && item ? item.file_path : null,
   );
   const highlights = highlightsQuery.data ?? [];
+  const theme = useUiStore((s) => s.theme);
+  const embedPdfTheme = useMemo<NonNullable<ViewerConfig['theme']>>(
+    () => ({
+      preference: theme,
+      light: EMBEDPDF_LIGHT_TOKENS,
+      dark: EMBEDPDF_DARK_TOKENS,
+    }),
+    [theme],
+  );
 
   const [viewer, setViewer] = useState<Viewer | null>(null);
   const [numPages, setNumPages] = useState(() => item?.page_count ?? 0);
@@ -638,7 +661,7 @@ export function PdfReaderView({
             }
             className={cn(
               isFinished
-                ? 'border-emerald-500/35 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/20'
+                ? 'border-emerald-500/35 bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300'
                 : '',
             )}
           >
@@ -647,6 +670,8 @@ export function PdfReaderView({
               {isFinished ? 'Terminado' : 'Marcar terminado'}
             </span>
           </Button>
+
+          <ThemeMenu variant="ghost" size="icon-xs" />
 
           <Button
             type="button"
@@ -681,14 +706,14 @@ export function PdfReaderView({
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         {pdfBytesState.loading ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-4 bg-[#070709] p-8">
+          <div className="flex flex-1 flex-col items-center justify-center gap-4 bg-[#f1f1f4] p-8 dark:bg-[#070709]">
             <Skeleton className="h-[74vh] w-[520px] max-w-full rounded-md" />
             <p className="font-mono text-xs text-muted-foreground">
               Cargando PDF local...
             </p>
           </div>
         ) : pdfBytesState.error ? (
-          <div className="flex flex-1 items-center justify-center bg-[#070709] p-6">
+          <div className="flex flex-1 items-center justify-center bg-[#f1f1f4] p-6 dark:bg-[#070709]">
             <EmptyState
               icon={<BookOpen className="size-5" />}
               title="No se pudo leer el archivo PDF"
@@ -716,7 +741,7 @@ export function PdfReaderView({
             <PDFViewer
               src={pdfBytesState.bytes}
               locale="es"
-              theme={EMBEDPDF_THEME}
+              theme={embedPdfTheme}
               features={EMBEDPDF_FEATURES}
               warnBeforeLeaving={false}
               onReady={handleViewerReady}

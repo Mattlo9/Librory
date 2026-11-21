@@ -8,7 +8,10 @@ import {
   Inbox,
   LayoutGrid,
   Library,
+  Monitor,
+  Moon,
   Sparkles,
+  Sun,
   Tag,
   Upload,
 } from 'lucide-react';
@@ -70,6 +73,9 @@ const ACTION_ICONS = {
   newShelf: <FolderPlus className="size-4" />,
   newTag: <Tag className="size-4" />,
   toggleView: <LayoutGrid className="size-4" />,
+  themeLight: <Sun className="size-4" />,
+  themeDark: <Moon className="size-4" />,
+  themeSystem: <Monitor className="size-4" />,
   sample: <Sparkles className="size-4" />,
   importFiles: <Upload className="size-4" />,
 } as const;
@@ -87,6 +93,7 @@ export function CommandPalette({
   const navigate = useUiStore((s) => s.navigate);
   const viewMode = useUiStore((s) => s.viewMode);
   const setViewMode = useUiStore((s) => s.setViewMode);
+  const setTheme = useUiStore((s) => s.setTheme);
   const setSelectedItemId = useUiStore((s) => s.setSelectedItemId);
   const openReader = useUiStore((s) => s.openReader);
 
@@ -203,6 +210,27 @@ export function CommandPalette({
         icon: ACTION_ICONS.toggleView,
         run: () => setViewMode(viewMode === 'grid' ? 'list' : 'grid'),
       },
+      {
+        id: 'theme-light',
+        label: 'Tema: Modo claro',
+        keywords: 'tema claro light apariencia color',
+        icon: ACTION_ICONS.themeLight,
+        run: () => setTheme('light'),
+      },
+      {
+        id: 'theme-dark',
+        label: 'Tema: Modo oscuro',
+        keywords: 'tema oscuro dark apariencia color',
+        icon: ACTION_ICONS.themeDark,
+        run: () => setTheme('dark'),
+      },
+      {
+        id: 'theme-system',
+        label: 'Tema: Seguir sistema',
+        keywords: 'tema sistema system auto apariencia color',
+        icon: ACTION_ICONS.themeSystem,
+        run: () => setTheme('system'),
+      },
       hasSample
         ? {
             id: 'clear-sample',
@@ -240,6 +268,7 @@ export function CommandPalette({
     onCreateTag,
     onImportFiles,
     seedSampleAsync,
+    setTheme,
     setViewMode,
     viewMode,
   ]);
@@ -385,7 +414,7 @@ export function CommandPalette({
                         className="cursor-pointer justify-between gap-3"
                       >
                         <div className="flex min-w-0 items-center gap-2.5">
-                          <Highlighter className="size-4 shrink-0 text-amber-400" />
+                          <Highlighter className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
                           <div className="min-w-0">
                             <p className="truncate font-serif text-[13px] text-foreground">
                               &ldquo;{entry.quote_text}&rdquo;

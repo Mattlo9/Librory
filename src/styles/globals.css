@@ -3,7 +3,42 @@
 
 @custom-variant dark (&:is(.dark *));
 
-:root,
+:root {
+  --background: #ffffff;
+  --foreground: #09090b;
+  --card: #ffffff;
+  --card-foreground: #09090b;
+  --popover: #ffffff;
+  --popover-foreground: #09090b;
+  --primary: #18181b;
+  --primary-foreground: #fafafa;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
+  --muted: #f4f4f5;
+  --muted-foreground: #63636e;
+  --accent: #f0f0f3;
+  --accent-foreground: #18181b;
+  --accent-brand: #4f46e5;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #e4e4e7;
+  --input: #d4d4d8;
+  --ring: #4f46e5;
+  --radius: 0.625rem;
+
+  --sidebar: #f8f8fa;
+  --sidebar-foreground: #3f3f46;
+  --sidebar-primary: #18181b;
+  --sidebar-primary-foreground: #fafafa;
+  --sidebar-accent: #ececf0;
+  --sidebar-accent-foreground: #09090b;
+  --sidebar-border: #e4e4e7;
+  --sidebar-ring: #4f46e5;
+
+  --scrollbar-thumb: #d4d4d8;
+  --scrollbar-thumb-hover: #a1a1aa;
+}
+
 .dark {
   --background: #09090b;
   --foreground: #f4f4f5;
@@ -35,6 +70,9 @@
   --sidebar-accent-foreground: #f4f4f5;
   --sidebar-border: #1e1e24;
   --sidebar-ring: #818cf8;
+
+  --scrollbar-thumb: #272730;
+  --scrollbar-thumb-hover: #3a3a46;
 }
 
 @theme inline {
@@ -98,7 +136,7 @@
 
 .scrollbar-subtle {
   scrollbar-width: thin;
-  scrollbar-color: #272730 transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 .scrollbar-subtle::-webkit-scrollbar {
@@ -111,12 +149,12 @@
 }
 
 .scrollbar-subtle::-webkit-scrollbar-thumb {
-  background-color: #272730;
+  background-color: var(--scrollbar-thumb);
   border-radius: 999px;
 }
 
 .scrollbar-subtle::-webkit-scrollbar-thumb:hover {
-  background-color: #3a3a46;
+  background-color: var(--scrollbar-thumb-hover);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -130,8 +168,24 @@
   }
 }
 
-/* Tokens CSS para EmbedPDF v3 alineados con Obsidian & Zinc Studio */
+/* Tokens CSS para EmbedPDF v3 alineados con Studio Claro y Obsidian & Zinc Studio */
 embedpdf-viewer {
+  --epdf-accent: #4f46e5;
+  --epdf-background: #ffffff;
+  --epdf-surface: #f8f8fa;
+  --epdf-surface-raised: #ffffff;
+  --epdf-text: #09090b;
+  --epdf-text-muted: #63636e;
+  --epdf-border: #e4e4e7;
+  --epdf-hover: #ececf0;
+  --epdf-canvas: #f1f1f4;
+  --epdf-tooltip: #18181b;
+  --epdf-tooltip-text: #fafafa;
+  --epdf-radius: 0.5rem;
+  --epdf-font: "Geist Variable", "Inter", system-ui, -apple-system, sans-serif;
+}
+
+.dark embedpdf-viewer {
   --epdf-accent: #818cf8;
   --epdf-background: #09090b;
   --epdf-surface: #0e0e11;
@@ -143,6 +197,4 @@ embedpdf-viewer {
   --epdf-canvas: #070709;
   --epdf-tooltip: #18181d;
   --epdf-tooltip-text: #f4f4f5;
-  --epdf-radius: 0.5rem;
-  --epdf-font: "Geist Variable", "Inter", system-ui, -apple-system, sans-serif;
 }

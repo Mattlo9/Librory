@@ -73,7 +73,7 @@ export function ImportStatusBanner({
         {hasProblems && importedCount === 0 ? (
           <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
         ) : (
-          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-400" />
+          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
         )}
 
         <div className="min-w-0 flex-1 space-y-1">

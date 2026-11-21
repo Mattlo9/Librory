@@ -45,6 +45,10 @@ export type ViewMode = 'grid' | 'list';
 
 export type SortOption = 'created_desc' | 'title_asc' | 'author_asc';
 
+export type ThemePreference = 'light' | 'dark' | 'system';
+
+export type ResolvedTheme = 'light' | 'dark';
+
 export interface LibraryItem {
   id: string;
   title: string;

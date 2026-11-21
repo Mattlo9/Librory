@@ -43,7 +43,7 @@ export const CoverImage = memo(function CoverImage({
   return (
     <div
       className={cn(
-        '@container relative w-full overflow-hidden rounded-md shadow-[0_14px_30px_-12px_rgba(0,0,0,0.8)] ring-1 ring-white/[0.08]',
+        '@container relative w-full overflow-hidden rounded-md shadow-[0_10px_24px_-12px_rgba(0,0,0,0.22)] ring-1 ring-black/[0.08] dark:shadow-[0_14px_30px_-12px_rgba(0,0,0,0.8)] dark:ring-white/[0.08]',
         TYPE_ASPECT_CLASS[type],
         className,
       )}

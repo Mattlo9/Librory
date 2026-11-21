@@ -453,7 +453,7 @@ function InspectorBody({
               <span
                 role="status"
                 aria-live="polite"
-                className="font-mono text-xs text-emerald-400"
+                className="font-mono text-xs text-emerald-600 dark:text-emerald-400"
               >
                 Guardado
               </span>

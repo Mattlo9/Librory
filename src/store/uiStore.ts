@@ -4,6 +4,7 @@ import type {
   ItemType,
   NavigationSection,
   SortOption,
+  ThemePreference,
   ViewMode,
 } from '@/types/domain';
 
@@ -41,6 +42,7 @@ interface UiState {
   viewMode: ViewMode;
   sortBy: SortOption;
   groupByShelf: boolean;
+  theme: ThemePreference;
   sidebarOpen: boolean;
   expandedShelfIds: Record<string, boolean>;
   tagsExpanded: boolean;
@@ -56,6 +58,7 @@ interface UiState {
   setViewMode: (mode: ViewMode) => void;
   setSortBy: (sort: SortOption) => void;
   setGroupByShelf: (grouped: boolean) => void;
+  setTheme: (theme: ThemePreference) => void;
   setSidebarOpen: (open: boolean) => void;
   toggleShelfExpanded: (id: string) => void;
   setShelfExpanded: (id: string, open: boolean) => void;
@@ -77,6 +80,7 @@ export const useUiStore = create<UiState>()(
       viewMode: 'grid',
       sortBy: 'created_desc',
       groupByShelf: true,
+      theme: 'dark',
       sidebarOpen: true,
       expandedShelfIds: {},
       tagsExpanded: true,
@@ -143,6 +147,8 @@ export const useUiStore = create<UiState>()(
 
       setGroupByShelf: (groupByShelf) => set({ groupByShelf }),
 
+      setTheme: (theme) => set({ theme }),
+
       setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
 
       toggleShelfExpanded: (id) =>
@@ -189,6 +195,7 @@ export const useUiStore = create<UiState>()(
         viewMode: state.viewMode,
         sortBy: state.sortBy,
         groupByShelf: state.groupByShelf,
+        theme: state.theme,
         sidebarOpen: state.sidebarOpen,
         expandedShelfIds: state.expandedShelfIds,
         tagsExpanded: state.tagsExpanded,

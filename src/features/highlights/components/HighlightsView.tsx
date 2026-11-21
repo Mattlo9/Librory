@@ -416,7 +416,7 @@ export function HighlightsView({
                       className="text-muted-foreground hover:text-foreground"
                     >
                       {copiedId === entry.id ? (
-                        <Check className="size-3.5 text-emerald-400" />
+                        <Check className="size-3.5 text-emerald-600 dark:text-emerald-400" />
                       ) : (
                         <Copy className="size-3.5" />
                       )}
