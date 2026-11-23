@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  CheckSquare,
   Clock,
   FolderPlus,
   FolderTree,
@@ -73,6 +74,7 @@ const ACTION_ICONS = {
   newShelf: <FolderPlus className="size-4" />,
   newTag: <Tag className="size-4" />,
   toggleView: <LayoutGrid className="size-4" />,
+  selectionMode: <CheckSquare className="size-4" />,
   themeLight: <Sun className="size-4" />,
   themeDark: <Moon className="size-4" />,
   themeSystem: <Monitor className="size-4" />,
@@ -93,6 +95,8 @@ export function CommandPalette({
   const navigate = useUiStore((s) => s.navigate);
   const viewMode = useUiStore((s) => s.viewMode);
   const setViewMode = useUiStore((s) => s.setViewMode);
+  const selectionMode = useUiStore((s) => s.selectionMode);
+  const setSelectionMode = useUiStore((s) => s.setSelectionMode);
   const setTheme = useUiStore((s) => s.setTheme);
   const setSelectedItemId = useUiStore((s) => s.setSelectedItemId);
   const openReader = useUiStore((s) => s.openReader);
@@ -211,6 +215,15 @@ export function CommandPalette({
         run: () => setViewMode(viewMode === 'grid' ? 'list' : 'grid'),
       },
       {
+        id: 'toggle-selection-mode',
+        label: selectionMode
+          ? 'Salir de selección múltiple'
+          : 'Activar selección múltiple',
+        keywords: 'seleccion multiple lote varios checkboxes',
+        icon: ACTION_ICONS.selectionMode,
+        run: () => setSelectionMode(!selectionMode),
+      },
+      {
         id: 'theme-light',
         label: 'Tema: Modo claro',
         keywords: 'tema claro light apariencia color',
@@ -268,6 +281,8 @@ export function CommandPalette({
     onCreateTag,
     onImportFiles,
     seedSampleAsync,
+    selectionMode,
+    setSelectionMode,
     setTheme,
     setViewMode,
     viewMode,

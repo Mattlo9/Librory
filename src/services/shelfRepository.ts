@@ -184,3 +184,41 @@ export async function removeItemFromShelf(itemId: string, shelfId: string): Prom
     [itemId, shelfId],
   );
 }
+
+const SHELF_BULK_CHUNK_SIZE = 400;
+
+export async function bulkAssignItemsToShelf(
+  itemIds: string[],
+  shelfId: string,
+): Promise<void> {
+  const uniqueIds = Array.from(new Set(itemIds));
+  if (uniqueIds.length === 0) return;
+
+  const db = await getDb();
+  for (let i = 0; i < uniqueIds.length; i += SHELF_BULK_CHUNK_SIZE) {
+    const chunk = uniqueIds.slice(i, i + SHELF_BULK_CHUNK_SIZE);
+    const valuesSql = chunk.map((_, idx) => `($${idx + 2}, $1)`).join(', ');
+    await db.execute(
+      `INSERT OR IGNORE INTO item_shelves (item_id, shelf_id) VALUES ${valuesSql}`,
+      [shelfId, ...chunk],
+    );
+  }
+}
+
+export async function bulkRemoveItemsFromShelf(
+  itemIds: string[],
+  shelfId: string,
+): Promise<void> {
+  const uniqueIds = Array.from(new Set(itemIds));
+  if (uniqueIds.length === 0) return;
+
+  const db = await getDb();
+  for (let i = 0; i < uniqueIds.length; i += SHELF_BULK_CHUNK_SIZE) {
+    const chunk = uniqueIds.slice(i, i + SHELF_BULK_CHUNK_SIZE);
+    const placeholders = chunk.map((_, idx) => `$${idx + 2}`).join(', ');
+    await db.execute(
+      `DELETE FROM item_shelves WHERE shelf_id = $1 AND item_id IN (${placeholders})`,
+      [shelfId, ...chunk],
+    );
+  }
+}
