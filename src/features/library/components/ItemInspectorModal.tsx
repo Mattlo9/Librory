@@ -41,7 +41,7 @@ import {
   useToggleItemShelf,
   useToggleItemTag,
 } from '@/features/shelves/hooks/useShelvesAndTags';
-import { isPdfReadableLocally } from '@/lib/highlights';
+import { isItemReadableLocally } from '@/lib/highlights';
 import { getShelfBreadcrumb } from '@/lib/shelfTree';
 import { ITEM_STATUS_LABELS, ITEM_TYPE_SINGULAR } from '@/lib/text';
 import { cn } from '@/lib/utils';
@@ -115,7 +115,8 @@ function InspectorBody({
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const savedTimerRef = useRef<number | null>(null);
   const isSample = item.file_path.startsWith('sample/');
-  const canReadLocally = isPdfReadableLocally(item.file_path, item.file_format);
+  const canReadLocally = isItemReadableLocally(item.file_path, item.file_format);
+  const isEpub = item.file_format === 'epub';
   const readingPercent =
     item.page_count > 0 && item.current_page > 0
       ? Math.min(100, Math.round((item.current_page / item.page_count) * 100))
@@ -221,7 +222,8 @@ function InspectorBody({
                 variant="outline"
                 className="rounded-md font-mono text-[10px] tabular-nums text-muted-foreground"
               >
-                {item.current_page} / {item.page_count} págs
+                {item.current_page} / {item.page_count}{' '}
+                {isEpub ? 'caps' : 'págs'}
               </Badge>
             ) : null}
           </div>
@@ -259,8 +261,10 @@ function InspectorBody({
               >
                 <BookOpen className="size-3" />
                 {item.current_page > 1
-                  ? `Continuar (pág. ${item.current_page})`
-                  : 'Leer PDF'}
+                  ? `Continuar (${isEpub ? 'cap.' : 'pág.'} ${item.current_page})`
+                  : isEpub
+                    ? 'Leer EPUB'
+                    : 'Leer PDF'}
               </Button>
             ) : null}
 

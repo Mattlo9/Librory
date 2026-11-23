@@ -29,7 +29,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { isPdfReadableLocally } from '@/lib/highlights';
+import { isItemReadableLocally } from '@/lib/highlights';
 import { ITEM_STATUS_LABELS } from '@/lib/text';
 import {
   ITEM_STATUSES,
@@ -97,7 +97,7 @@ function BookMenuBody({
   actions: BookItemActions;
   ui: MenuPrimitives;
 }) {
-  const canReadLocally = isPdfReadableLocally(item.file_path, item.file_format);
+  const canReadLocally = isItemReadableLocally(item.file_path, item.file_format);
   const isSample = item.file_path.startsWith('sample/');
 
   return (

@@ -45,6 +45,16 @@ export function isPdfReadableLocally(
   return fileFormat === 'pdf' && !filePath.startsWith('sample/');
 }
 
+export function isItemReadableLocally(
+  filePath: string,
+  fileFormat: FileFormat,
+): boolean {
+  return (
+    !filePath.startsWith('sample/') &&
+    (fileFormat === 'pdf' || fileFormat === 'epub')
+  );
+}
+
 export function formatHighlightAsMarkdown(params: {
   quote: string;
   note?: string;

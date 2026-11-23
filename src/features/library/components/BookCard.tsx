@@ -10,7 +10,7 @@ import {
   type BookItemActions,
 } from '@/features/library/components/BookItemMenu';
 import { useAssetUrl } from '@/features/library/hooks/useAssetUrl';
-import { isPdfReadableLocally } from '@/lib/highlights';
+import { isItemReadableLocally } from '@/lib/highlights';
 import type { LibraryItemWithRelations } from '@/types/domain';
 
 interface BookCardProps {
@@ -24,7 +24,7 @@ const COVER_BOX_STYLE = {
 
 export const BookCard = memo(function BookCard({ item, actions }: BookCardProps) {
   const assetUrl = useAssetUrl(item.cover_path, item.updated_at);
-  const canReadLocally = isPdfReadableLocally(item.file_path, item.file_format);
+  const canReadLocally = isItemReadableLocally(item.file_path, item.file_format);
   const readingPercent =
     item.page_count > 0 && item.current_page > 0
       ? Math.min(100, Math.round((item.current_page / item.page_count) * 100))
@@ -36,7 +36,7 @@ export const BookCard = memo(function BookCard({ item, actions }: BookCardProps)
       ? () => actions.onOpenReader?.(item.id)
       : undefined;
   const hoverHint = canReadLocally
-    ? 'Clic para ver ficha · Doble clic para leer PDF'
+    ? `Clic para ver ficha · Doble clic para leer ${item.file_format.toUpperCase()}`
     : undefined;
 
   return (

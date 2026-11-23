@@ -148,6 +148,15 @@ export async function extractEpubMetadataAndCover(
   const title = firstElementText(opfDoc, 'title');
   const author = firstElementText(opfDoc, 'creator');
 
+  const spineRefs = Array.from(opfDoc.getElementsByTagNameNS('*', 'itemref'));
+  const fallbackRefs =
+    spineRefs.length > 0
+      ? spineRefs
+      : Array.from(opfDoc.getElementsByTagName('itemref'));
+  const pageCount = fallbackRefs.filter(
+    (ref) => ref.getAttribute('linear') !== 'no',
+  ).length;
+
   let coverWebpBytes: Uint8Array | null = null;
   const coverHref = findCoverHref(opfDoc);
   if (coverHref) {
@@ -161,7 +170,7 @@ export async function extractEpubMetadataAndCover(
   return {
     title,
     author,
-    pageCount: 0,
+    pageCount,
     coverWebpBytes,
   };
 }
