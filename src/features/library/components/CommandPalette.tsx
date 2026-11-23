@@ -8,12 +8,14 @@ import {
   Inbox,
   LayoutGrid,
   Library,
+  ListFilter,
   Monitor,
   Moon,
   Sparkles,
   Sun,
   Tag,
   Upload,
+  X,
 } from 'lucide-react';
 import { useDeferredValue, useMemo, useState, type ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -76,6 +78,8 @@ const ACTION_ICONS = {
   themeLight: <Sun className="size-4" />,
   themeDark: <Moon className="size-4" />,
   themeSystem: <Monitor className="size-4" />,
+  statusFilter: <ListFilter className="size-4" />,
+  clearFilter: <X className="size-4" />,
   sample: <Sparkles className="size-4" />,
   importFiles: <Upload className="size-4" />,
 } as const;
@@ -90,7 +94,10 @@ export function CommandPalette({
 }: CommandPaletteProps) {
   const open = useUiStore((s) => s.commandPaletteOpen);
   const setOpen = useUiStore((s) => s.setCommandPaletteOpen);
+  const activeSection = useUiStore((s) => s.activeSection);
   const navigate = useUiStore((s) => s.navigate);
+  const activeStatusFilter = useUiStore((s) => s.activeStatusFilter);
+  const setActiveStatusFilter = useUiStore((s) => s.setActiveStatusFilter);
   const viewMode = useUiStore((s) => s.viewMode);
   const setViewMode = useUiStore((s) => s.setViewMode);
   const setTheme = useUiStore((s) => s.setTheme);
@@ -231,6 +238,65 @@ export function CommandPalette({
         icon: ACTION_ICONS.themeSystem,
         run: () => setTheme('system'),
       },
+      {
+        id: 'status-filter-reading',
+        label: 'Filtrar estado: Leyendo',
+        keywords: 'filtrar estado leyendo reading progreso',
+        icon: ACTION_ICONS.statusFilter,
+        run: () => {
+          if (activeSection === 'highlights' || activeSection === 'inbox') {
+            navigate('all');
+          }
+          setActiveStatusFilter('reading');
+        },
+      },
+      {
+        id: 'status-filter-to-read',
+        label: 'Filtrar estado: Por leer',
+        keywords: 'filtrar estado por leer to read pendiente',
+        icon: ACTION_ICONS.statusFilter,
+        run: () => {
+          if (activeSection === 'highlights' || activeSection === 'inbox') {
+            navigate('all');
+          }
+          setActiveStatusFilter('to_read');
+        },
+      },
+      {
+        id: 'status-filter-finished',
+        label: 'Filtrar estado: Terminado',
+        keywords: 'filtrar estado terminado finished completado',
+        icon: ACTION_ICONS.statusFilter,
+        run: () => {
+          if (activeSection === 'highlights' || activeSection === 'inbox') {
+            navigate('all');
+          }
+          setActiveStatusFilter('finished');
+        },
+      },
+      {
+        id: 'status-filter-reference',
+        label: 'Filtrar estado: Referencia',
+        keywords: 'filtrar estado referencia reference consulta',
+        icon: ACTION_ICONS.statusFilter,
+        run: () => {
+          if (activeSection === 'highlights' || activeSection === 'inbox') {
+            navigate('all');
+          }
+          setActiveStatusFilter('reference');
+        },
+      },
+      ...(activeStatusFilter !== 'all'
+        ? [
+            {
+              id: 'status-filter-clear',
+              label: 'Limpiar filtro de estado',
+              keywords: 'limpiar quitar reset filtro estado todos',
+              icon: ACTION_ICONS.clearFilter,
+              run: () => setActiveStatusFilter('all'),
+            },
+          ]
+        : []),
       hasSample
         ? {
             id: 'clear-sample',
@@ -261,6 +327,8 @@ export function CommandPalette({
       run: item.run,
     }));
   }, [
+    activeSection,
+    activeStatusFilter,
     clearSampleAsync,
     hasSample,
     navigate,
@@ -268,6 +336,7 @@ export function CommandPalette({
     onCreateTag,
     onImportFiles,
     seedSampleAsync,
+    setActiveStatusFilter,
     setTheme,
     setViewMode,
     viewMode,

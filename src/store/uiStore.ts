@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type {
+  ItemStatus,
   ItemType,
   NavigationSection,
   SortOption,
@@ -38,6 +39,7 @@ interface UiState {
   history: NavigationSection[];
   historyIndex: number;
   activeTypeFilter: ItemType | 'all';
+  activeStatusFilter: ItemStatus | 'all';
   coverSize: number;
   viewMode: ViewMode;
   sortBy: SortOption;
@@ -54,6 +56,7 @@ interface UiState {
   goBack: () => void;
   goForward: () => void;
   setActiveTypeFilter: (type: ItemType | 'all') => void;
+  setActiveStatusFilter: (status: ItemStatus | 'all') => void;
   setCoverSize: (size: number) => void;
   setViewMode: (mode: ViewMode) => void;
   setSortBy: (sort: SortOption) => void;
@@ -76,6 +79,7 @@ export const useUiStore = create<UiState>()(
       history: ['all'],
       historyIndex: 0,
       activeTypeFilter: 'all',
+      activeStatusFilter: 'all',
       coverSize: 158,
       viewMode: 'grid',
       sortBy: 'created_desc',
@@ -102,12 +106,14 @@ export const useUiStore = create<UiState>()(
           nextHistory.length > MAX_HISTORY_ENTRIES
             ? nextHistory.slice(nextHistory.length - MAX_HISTORY_ENTRIES)
             : nextHistory;
-        set({
+        set((state) => ({
           activeSection: section,
           history: boundedHistory,
           historyIndex: boundedHistory.length - 1,
           readerTarget: null,
-        });
+          activeStatusFilter:
+            section === 'inbox' ? 'all' : state.activeStatusFilter,
+        }));
       },
 
       setActiveSection: (section) => get().navigate(section),
@@ -117,11 +123,13 @@ export const useUiStore = create<UiState>()(
         if (historyIndex <= 0) return;
         const target = history[historyIndex - 1];
         if (!target) return;
-        set({
+        set((state) => ({
           activeSection: target,
           historyIndex: historyIndex - 1,
           readerTarget: null,
-        });
+          activeStatusFilter:
+            target === 'inbox' ? 'all' : state.activeStatusFilter,
+        }));
       },
 
       goForward: () => {
@@ -129,14 +137,18 @@ export const useUiStore = create<UiState>()(
         if (historyIndex >= history.length - 1) return;
         const target = history[historyIndex + 1];
         if (!target) return;
-        set({
+        set((state) => ({
           activeSection: target,
           historyIndex: historyIndex + 1,
           readerTarget: null,
-        });
+          activeStatusFilter:
+            target === 'inbox' ? 'all' : state.activeStatusFilter,
+        }));
       },
 
       setActiveTypeFilter: (activeTypeFilter) => set({ activeTypeFilter }),
+
+      setActiveStatusFilter: (activeStatusFilter) => set({ activeStatusFilter }),
 
       setCoverSize: (coverSize) =>
         set({ coverSize: Math.min(240, Math.max(110, coverSize)) }),

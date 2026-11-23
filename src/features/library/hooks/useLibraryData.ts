@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import {
   createItem,
+  getItemCountsByStatus,
   getItemCountsByType,
   getItemWithRelationsById,
   getNavigationCounts,
@@ -34,6 +35,7 @@ import type {
   CreateHighlightInput,
   CreateItemInput,
   ItemFilter,
+  ItemStatus,
   ItemType,
   NavigationSection,
   SaveReadingProgressInput,
@@ -48,11 +50,18 @@ export const libraryKeys = {
   storageDirs: ['app', 'storage-dirs'] as const,
   navCounts: ['library', 'nav-counts'] as const,
   typeCountsRoot: ['library', 'type-counts'] as const,
-  typeCounts: (sectionKey: string) =>
-    ['library', 'type-counts', sectionKey] as const,
+  typeCounts: (sectionKey: string, statusFilter: string) =>
+    ['library', 'type-counts', sectionKey, statusFilter] as const,
+  statusCountsRoot: ['library', 'status-counts'] as const,
+  statusCounts: (sectionKey: string, typeFilter: string) =>
+    ['library', 'status-counts', sectionKey, typeFilter] as const,
   itemsRoot: ['library', 'items'] as const,
-  items: (sectionKey: string, typeFilter: string, sortBy: string) =>
-    ['library', 'items', sectionKey, typeFilter, sortBy] as const,
+  items: (
+    sectionKey: string,
+    typeFilter: string,
+    statusFilter: string,
+    sortBy: string,
+  ) => ['library', 'items', sectionKey, typeFilter, statusFilter, sortBy] as const,
   itemDetailRoot: ['library', 'item'] as const,
   itemDetail: (id: string) => ['library', 'item', id] as const,
   searchFtsRoot: ['library', 'search-fts'] as const,
@@ -87,6 +96,7 @@ export function buildSectionFilter(
   section: NavigationSection,
   shelves: ShelfWithCount[],
   typeFilter: ItemType | 'all',
+  statusFilter: ItemStatus | 'all',
   sortBy: SortOption,
 ): ItemFilter {
   const base: ItemFilter = { sortBy };
@@ -97,13 +107,18 @@ export function buildSectionFilter(
 
   if (section === 'inbox') {
     base.status = 'inbox';
-  } else if (section === 'recent') {
-    base.recentOnly = true;
-  } else if (typeof section === 'object' && section.kind === 'shelf') {
-    const descendantIds = collectDescendantShelfIds(shelves, section.shelfId);
-    base.shelfIds = descendantIds.length > 0 ? descendantIds : [section.shelfId];
-  } else if (typeof section === 'object' && section.kind === 'tag') {
-    base.tagId = section.tagId;
+  } else {
+    if (statusFilter !== 'all') {
+      base.status = statusFilter;
+    }
+    if (section === 'recent') {
+      base.recentOnly = true;
+    } else if (typeof section === 'object' && section.kind === 'shelf') {
+      const descendantIds = collectDescendantShelfIds(shelves, section.shelfId);
+      base.shelfIds = descendantIds.length > 0 ? descendantIds : [section.shelfId];
+    } else if (typeof section === 'object' && section.kind === 'tag') {
+      base.tagId = section.tagId;
+    }
   }
 
   return base;
@@ -121,19 +136,46 @@ export function useNavigationCounts() {
 export function useTypeCounts(
   section: NavigationSection,
   shelves: ShelfWithCount[],
+  statusFilter: ItemStatus | 'all',
 ) {
   const tauriActive = isTauriRuntime();
   const sectionKey = getNavigationSectionKey(section);
   const baseFilter = useMemo(() => {
     const { type: _ignoredType, sortBy: _ignoredSort, ...rest } =
-      buildSectionFilter(section, shelves, 'all', 'created_desc');
+      buildSectionFilter(section, shelves, 'all', statusFilter, 'created_desc');
     return rest;
-  }, [section, shelves]);
+  }, [section, shelves, statusFilter]);
 
   return useQuery({
-    queryKey: [...libraryKeys.typeCounts(sectionKey), baseFilter.shelfIds ?? []],
+    queryKey: [
+      ...libraryKeys.typeCounts(sectionKey, statusFilter),
+      baseFilter.shelfIds ?? [],
+    ],
     queryFn: () => getItemCountsByType(baseFilter),
     enabled: tauriActive && section !== 'highlights',
+  });
+}
+
+export function useStatusCounts(
+  section: NavigationSection,
+  shelves: ShelfWithCount[],
+  typeFilter: ItemType | 'all',
+) {
+  const tauriActive = isTauriRuntime();
+  const sectionKey = getNavigationSectionKey(section);
+  const baseFilter = useMemo(() => {
+    const { status: _ignoredStatus, sortBy: _ignoredSort, ...rest } =
+      buildSectionFilter(section, shelves, typeFilter, 'all', 'created_desc');
+    return rest;
+  }, [section, shelves, typeFilter]);
+
+  return useQuery({
+    queryKey: [
+      ...libraryKeys.statusCounts(sectionKey, typeFilter),
+      baseFilter.shelfIds ?? [],
+    ],
+    queryFn: () => getItemCountsByStatus(baseFilter),
+    enabled: tauriActive && section !== 'highlights' && section !== 'inbox',
   });
 }
 
@@ -141,18 +183,19 @@ export function useLibraryItems(
   section: NavigationSection,
   shelves: ShelfWithCount[],
   typeFilter: ItemType | 'all',
+  statusFilter: ItemStatus | 'all',
   sortBy: SortOption,
 ) {
   const tauriActive = isTauriRuntime();
   const sectionKey = getNavigationSectionKey(section);
   const filter = useMemo(
-    () => buildSectionFilter(section, shelves, typeFilter, sortBy),
-    [section, shelves, typeFilter, sortBy],
+    () => buildSectionFilter(section, shelves, typeFilter, statusFilter, sortBy),
+    [section, shelves, typeFilter, statusFilter, sortBy],
   );
 
   return useQuery({
     queryKey: [
-      ...libraryKeys.items(sectionKey, typeFilter, sortBy),
+      ...libraryKeys.items(sectionKey, typeFilter, statusFilter, sortBy),
       filter.shelfIds ?? [],
     ],
     queryFn: () => listItemsWithRelations(filter),
@@ -237,6 +280,7 @@ export function useUpdateItem() {
       void Promise.all([
         queryClient.invalidateQueries({ queryKey: libraryKeys.itemsRoot }),
         queryClient.invalidateQueries({ queryKey: libraryKeys.typeCountsRoot }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.statusCountsRoot }),
         queryClient.invalidateQueries({ queryKey: libraryKeys.navCounts }),
         queryClient.invalidateQueries({
           queryKey: libraryKeys.itemDetail(variables.id),
@@ -317,6 +361,7 @@ export function useSaveReadingProgress() {
         queryClient.invalidateQueries({ queryKey: libraryKeys.itemsRoot }),
         queryClient.invalidateQueries({ queryKey: libraryKeys.navCounts }),
         queryClient.invalidateQueries({ queryKey: libraryKeys.typeCountsRoot }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.statusCountsRoot }),
         queryClient.invalidateQueries({
           queryKey: libraryKeys.itemDetail(variables.itemId),
         }),

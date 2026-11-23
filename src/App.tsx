@@ -22,6 +22,7 @@ import {
   useNavigationCounts,
   useOpenBookExternally,
   useSeedSampleLibrary,
+  useStatusCounts,
   useTypeCounts,
   useUpdateItem,
 } from '@/features/library/hooks/useLibraryData';
@@ -31,6 +32,7 @@ import { useShelves, useTags } from '@/features/shelves/hooks/useShelvesAndTags'
 import { useThemeSync } from '@/hooks/useTheme';
 import { useUiStore } from '@/store/uiStore';
 import type {
+  ItemStatus,
   ItemType,
   LibraryItemWithRelations,
   ShelfWithCount,
@@ -108,6 +110,15 @@ const EMPTY_TYPE_COUNTS: Record<ItemType | 'all', number> = {
   unsorted: 0,
 };
 
+const EMPTY_STATUS_COUNTS: Record<ItemStatus | 'all', number> = {
+  all: 0,
+  inbox: 0,
+  to_read: 0,
+  reading: 0,
+  reference: 0,
+  finished: 0,
+};
+
 const EMPTY_SHELVES: ShelfWithCount[] = [];
 const EMPTY_TAGS: TagWithCount[] = [];
 const EMPTY_ITEMS: LibraryItemWithRelations[] = [];
@@ -136,6 +147,8 @@ export function App() {
   const navigate = useUiStore((s) => s.navigate);
   const activeTypeFilter = useUiStore((s) => s.activeTypeFilter);
   const setActiveTypeFilter = useUiStore((s) => s.setActiveTypeFilter);
+  const activeStatusFilter = useUiStore((s) => s.activeStatusFilter);
+  const setActiveStatusFilter = useUiStore((s) => s.setActiveStatusFilter);
   const viewMode = useUiStore((s) => s.viewMode);
   const sortBy = useUiStore((s) => s.sortBy);
   const groupByShelf = useUiStore((s) => s.groupByShelf);
@@ -232,15 +245,26 @@ export function App() {
   const tags = tagsQuery.data ?? EMPTY_TAGS;
   const navCounts = navCountsQuery.data ?? EMPTY_NAV_COUNTS;
 
-  const typeCountsQuery = useTypeCounts(activeSection, shelves);
+  const typeCountsQuery = useTypeCounts(
+    activeSection,
+    shelves,
+    activeStatusFilter,
+  );
+  const statusCountsQuery = useStatusCounts(
+    activeSection,
+    shelves,
+    activeTypeFilter,
+  );
   const itemsQuery = useLibraryItems(
     activeSection,
     shelves,
     activeTypeFilter,
+    activeStatusFilter,
     sortBy,
   );
 
   const typeCounts = typeCountsQuery.data ?? EMPTY_TYPE_COUNTS;
+  const statusCounts = statusCountsQuery.data ?? EMPTY_STATUS_COUNTS;
   const items = itemsQuery.data ?? EMPTY_ITEMS;
 
   const heading = useMemo(
@@ -303,8 +327,10 @@ export function App() {
   }
 
   const isHighlightsView = activeSection === 'highlights';
-  const showEmptyLibraryActions =
-    navCounts.all === 0 && activeTypeFilter === 'all';
+  const hasActiveFilters =
+    activeTypeFilter !== 'all' ||
+    (activeSection !== 'inbox' && activeStatusFilter !== 'all');
+  const showEmptyLibraryActions = navCounts.all === 0 && !hasActiveFilters;
 
   return (
     <>
@@ -349,7 +375,11 @@ export function App() {
               <TypeFilterBar
                 activeType={activeTypeFilter}
                 counts={typeCounts}
+                activeStatus={activeStatusFilter}
+                statusCounts={statusCounts}
+                showStatusFilter={activeSection !== 'inbox'}
                 onSelectType={setActiveTypeFilter}
+                onSelectStatus={setActiveStatusFilter}
               />
             ) : null}
 
@@ -410,19 +440,22 @@ export function App() {
                       icon={<Library className="size-5" />}
                       title="No hay recursos en esta vista"
                       description={
-                        activeTypeFilter !== 'all'
-                          ? 'Prueba cambiando el filtro de tipo a All para ver todos los elementos de esta sección.'
+                        hasActiveFilters
+                          ? 'Prueba limpiando los filtros de tipo y estado para ver todos los elementos de esta sección.'
                           : 'Aún no hay elementos asignados a esta estantería o etiqueta.'
                       }
                       actions={
-                        activeTypeFilter !== 'all' ? (
+                        hasActiveFilters ? (
                           <Button
                             type="button"
                             variant="outline"
                             size="sm"
-                            onClick={() => setActiveTypeFilter('all')}
+                            onClick={() => {
+                              setActiveTypeFilter('all');
+                              setActiveStatusFilter('all');
+                            }}
                           >
-                            Mostrar todos los tipos
+                            Limpiar filtros
                           </Button>
                         ) : (
                           <Button
