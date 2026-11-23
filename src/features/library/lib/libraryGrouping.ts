@@ -27,6 +27,9 @@ export function getSectionHeading(
   if (section === 'all') {
     return { title: 'All Books', segments: ['All Books'] };
   }
+  if (section === 'favorites') {
+    return { title: 'Favoritos', segments: ['Favoritos'] };
+  }
   if (section === 'recent') {
     return { title: 'Recent', segments: ['Recent'] };
   }

@@ -4,6 +4,7 @@ import {
   ExternalLink,
   MoreHorizontal,
   Pencil,
+  Star,
   Trash2,
 } from 'lucide-react';
 import { type ComponentType, type ReactNode } from 'react';
@@ -31,6 +32,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { isPdfReadableLocally } from '@/lib/highlights';
 import { ITEM_STATUS_LABELS } from '@/lib/text';
+import { cn } from '@/lib/utils';
 import {
   ITEM_STATUSES,
   type ItemStatus,
@@ -42,6 +44,7 @@ export interface BookItemActions {
   onOpenReader?: (id: string) => void;
   onOpenExternally: (item: LibraryItemWithRelations) => void;
   onChangeStatus: (item: LibraryItemWithRelations, status: ItemStatus) => void;
+  onToggleFavorite: (item: LibraryItemWithRelations) => void;
   onRequestDelete: (item: LibraryItemWithRelations) => void;
 }
 
@@ -99,6 +102,7 @@ function BookMenuBody({
 }) {
   const canReadLocally = isPdfReadableLocally(item.file_path, item.file_format);
   const isSample = item.file_path.startsWith('sample/');
+  const isFavorite = item.is_favorite === 1;
 
   return (
     <>
@@ -125,6 +129,20 @@ function BookMenuBody({
       <ui.Item className="text-xs" onSelect={() => actions.onSelect(item.id)}>
         <Pencil className="size-3.5" />
         <span>Ver / editar ficha</span>
+      </ui.Item>
+
+      <ui.Item
+        className="text-xs"
+        onSelect={() => actions.onToggleFavorite(item)}
+      >
+        <Star
+          className={cn(
+            'size-3.5',
+            isFavorite &&
+              'fill-amber-500 text-amber-500 dark:fill-amber-400 dark:text-amber-400',
+          )}
+        />
+        <span>{isFavorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}</span>
       </ui.Item>
 
       <ui.Separator />

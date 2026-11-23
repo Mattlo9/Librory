@@ -12,6 +12,7 @@ import {
   Pencil,
   Plus,
   Search,
+  Star,
   Trash2,
 } from 'lucide-react';
 import { memo, useCallback, useMemo, useState, type ReactNode } from 'react';
@@ -62,6 +63,7 @@ interface SidebarProps {
   navCounts: {
     inbox: number;
     all: number;
+    favorites: number;
     recent: number;
     highlights: number;
   };
@@ -76,6 +78,7 @@ interface SidebarProps {
 
 const INBOX_ICON = <Inbox className="size-4" />;
 const LIBRARY_ICON = <Library className="size-4" />;
+const FAVORITES_ICON = <Star className="size-4" />;
 const RECENT_ICON = <Clock className="size-4" />;
 const HIGHLIGHTS_ICON = <Highlighter className="size-4" />;
 
@@ -271,6 +274,10 @@ export const Sidebar = memo(function Sidebar({
 
   const handleSelectInbox = useCallback(() => navigate('inbox'), [navigate]);
   const handleSelectAll = useCallback(() => navigate('all'), [navigate]);
+  const handleSelectFavorites = useCallback(
+    () => navigate('favorites'),
+    [navigate],
+  );
   const handleSelectRecent = useCallback(() => navigate('recent'), [navigate]);
   const handleSelectHighlights = useCallback(
     () => navigate('highlights'),
@@ -344,6 +351,13 @@ export const Sidebar = memo(function Sidebar({
                     count={navCounts.all}
                     active={activeSection === 'all'}
                     onSelect={handleSelectAll}
+                  />
+                  <PrimaryNavItem
+                    icon={FAVORITES_ICON}
+                    label="Favoritos"
+                    count={navCounts.favorites}
+                    active={activeSection === 'favorites'}
+                    onSelect={handleSelectFavorites}
                   />
                   <PrimaryNavItem
                     icon={RECENT_ICON}

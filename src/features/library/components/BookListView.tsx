@@ -1,3 +1,4 @@
+import { Star } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -13,6 +14,7 @@ import {
 import { useAssetUrl } from '@/features/library/hooks/useAssetUrl';
 import { isPdfReadableLocally } from '@/lib/highlights';
 import { ITEM_STATUS_LABELS, ITEM_TYPE_SINGULAR } from '@/lib/text';
+import { cn } from '@/lib/utils';
 import type {
   LibraryItemWithRelations,
   ShelfWithCount,
@@ -59,6 +61,7 @@ const BookListRow = memo(function BookListRow({
   const shelfNames = takeResolvedNames(item.shelf_ids, shelfNameById, 2);
   const tagNames = takeResolvedNames(item.tag_ids, tagNameById, 2);
   const canReadLocally = isPdfReadableLocally(item.file_path, item.file_format);
+  const isFavorite = item.is_favorite === 1;
   const readingPercent =
     item.page_count > 0 && item.current_page > 0
       ? Math.min(100, Math.round((item.current_page / item.page_count) * 100))
@@ -67,7 +70,7 @@ const BookListRow = memo(function BookListRow({
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        <div className="group grid w-full grid-cols-[40px_minmax(0,2fr)_minmax(0,1.3fr)_120px_100px_110px_32px] items-center gap-4 rounded-lg px-3 py-2.5 text-left transition-colors [content-visibility:auto] [contain-intrinsic-size:64px] hover:bg-secondary/70 focus-within:bg-secondary/70">
+        <div className="group grid w-full grid-cols-[40px_minmax(0,2fr)_minmax(0,1.3fr)_120px_100px_110px_64px] items-center gap-4 rounded-lg px-3 py-2.5 text-left transition-colors [content-visibility:auto] [contain-intrinsic-size:64px] hover:bg-secondary/70 focus-within:bg-secondary/70">
           <button
             type="button"
             onClick={() => actions.onSelect(item.id)}
@@ -143,7 +146,30 @@ const BookListRow = memo(function BookListRow({
             </span>
           </button>
 
-          <div className="flex justify-end">
+          <div className="flex items-center justify-end gap-1">
+            <button
+              type="button"
+              aria-label={
+                isFavorite
+                  ? `Quitar ${item.title} de favoritos`
+                  : `Añadir ${item.title} a favoritos`
+              }
+              aria-pressed={isFavorite}
+              title={isFavorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}
+              onClick={(e) => {
+                e.stopPropagation();
+                actions.onToggleFavorite(item);
+              }}
+              className={cn(
+                'flex size-7 items-center justify-center rounded-md outline-none transition-opacity hover:bg-accent focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring',
+                isFavorite
+                  ? 'text-amber-500 opacity-100 dark:text-amber-400'
+                  : 'text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100 group-focus-within:opacity-100',
+              )}
+            >
+              <Star className={cn('size-3.5', isFavorite && 'fill-current')} />
+            </button>
+
             <BookDropdownMenu
               item={item}
               actions={actions}
@@ -174,7 +200,7 @@ export function BookListView({
 
   return (
     <div className="px-6 py-4">
-      <div className="mb-1 grid grid-cols-[40px_minmax(0,2fr)_minmax(0,1.3fr)_120px_100px_110px_32px] gap-4 border-b border-border px-3 pb-2 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+      <div className="mb-1 grid grid-cols-[40px_minmax(0,2fr)_minmax(0,1.3fr)_120px_100px_110px_64px] gap-4 border-b border-border px-3 pb-2 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
         <span />
         <span>Título y autor</span>
         <span>Estanterías y etiquetas</span>

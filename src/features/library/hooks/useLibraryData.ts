@@ -97,6 +97,8 @@ export function buildSectionFilter(
 
   if (section === 'inbox') {
     base.status = 'inbox';
+  } else if (section === 'favorites') {
+    base.favoriteOnly = true;
   } else if (section === 'recent') {
     base.recentOnly = true;
   } else if (typeof section === 'object' && section.kind === 'shelf') {
@@ -254,6 +256,24 @@ export function useDeleteItem() {
     mutationFn: (id: string) => deleteItemAndFiles(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: libraryKeys.all });
+    },
+  });
+}
+
+export function useToggleItemFavorite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, isFavorite }: { id: string; isFavorite: boolean }) =>
+      updateItem(id, { is_favorite: isFavorite ? 1 : 0 }),
+    onSuccess: (_data, variables) => {
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: libraryKeys.itemsRoot }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.typeCountsRoot }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.navCounts }),
+        queryClient.invalidateQueries({
+          queryKey: libraryKeys.itemDetail(variables.id),
+        }),
+      ]);
     },
   });
 }
