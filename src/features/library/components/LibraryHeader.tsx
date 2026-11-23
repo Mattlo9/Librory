@@ -26,6 +26,7 @@ import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Slider } from '@/components/ui/slider';
 import { ThemeMenu } from '@/components/ui/theme-menu';
+import { PomodoroWidget } from '@/features/pomodoro/components/PomodoroWidget';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import {
   Tooltip,
@@ -271,6 +272,8 @@ export const LibraryHeader = memo(function LibraryHeader({
             </Tooltip>
           </>
         ) : null}
+
+        <PomodoroWidget variant="header" />
 
         <ThemeMenu />
 

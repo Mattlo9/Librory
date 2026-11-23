@@ -33,12 +33,18 @@ export type ShelfCategory = (typeof SHELF_CATEGORIES)[number];
 export const HIGHLIGHT_COLORS = ['amber', 'sage', 'clay', 'slate'] as const;
 export type HighlightColor = (typeof HIGHLIGHT_COLORS)[number];
 
+export const POMODORO_PHASES = ['focus', 'short_break', 'long_break'] as const;
+export type PomodoroPhase = (typeof POMODORO_PHASES)[number];
+
+export type StudyStatsRange = 'all' | '30d' | '7d';
+
 export type NavigationSection =
   | 'inbox'
   | 'all'
   | 'favorites'
   | 'recent'
   | 'highlights'
+  | 'notes'
   | 'stats'
   | { kind: 'shelf'; shelfId: string }
   | { kind: 'tag'; tagId: string };
@@ -298,4 +304,126 @@ export interface ReadingStatsSnapshot {
     finishedCount: number;
     highlightsCount: number;
   }>;
+}
+
+export interface StudySession {
+  id: string;
+  item_id: string | null;
+  phase: PomodoroPhase;
+  planned_seconds: number;
+  duration_seconds: number;
+  completed: number;
+  started_at: string;
+  ended_at: string;
+  local_date: string;
+  local_hour: number;
+  created_at: string;
+}
+
+export interface CreateStudySessionInput {
+  item_id?: string | null;
+  phase: PomodoroPhase;
+  planned_seconds: number;
+  duration_seconds: number;
+  completed: boolean;
+  started_at: string;
+  ended_at: string;
+  local_date: string;
+  local_hour: number;
+}
+
+export interface StudyHeatmapDay {
+  date: string;
+  sessions: number;
+  focusSeconds: number;
+  intensity: 0 | 1 | 2 | 3 | 4;
+}
+
+export interface StudyOverviewStats {
+  range: StudyStatsRange;
+  totalSessions: number;
+  completedSessions: number;
+  totalFocusSeconds: number;
+  activeDays: number;
+  peakHour: number | null;
+  currentStreakDays: number;
+  longestStreakDays: number;
+  topBook: {
+    itemId: string;
+    title: string;
+    author: string;
+    focusSeconds: number;
+    sessions: number;
+  } | null;
+  heatmapDays: StudyHeatmapDay[];
+  todayFocusSeconds: number;
+  todaySessions: number;
+  rangeStartDate: string | null;
+}
+
+export interface PomodoroBookOption {
+  id: string;
+  title: string;
+  author: string;
+  status: ItemStatus;
+}
+
+export interface Note {
+  id: string;
+  title: string;
+  content: string;
+  folder: string;
+  tags_json: string;
+  item_id: string | null;
+  is_pinned: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NoteWithItem extends Note {
+  tags: string[];
+  item_title: string | null;
+  item_author: string | null;
+}
+
+export interface CreateNoteInput {
+  title: string;
+  content?: string;
+  folder?: string;
+  tags?: string[];
+  item_id?: string | null;
+  is_pinned?: boolean;
+}
+
+export interface UpdateNoteInput {
+  title?: string;
+  content?: string;
+  folder?: string;
+  tags?: string[];
+  item_id?: string | null;
+  is_pinned?: boolean;
+}
+
+export type ActivityRange = '6m' | '30d' | '7d';
+
+export interface ActivityBucket {
+  key: string;
+  label: string;
+  fullLabel: string;
+  addedCount: number;
+  finishedCount: number;
+  highlightsCount: number;
+  notesCount: number;
+}
+
+export interface ActivityStatsSnapshot {
+  range: ActivityRange;
+  buckets: ActivityBucket[];
+  totals: {
+    added: number;
+    finished: number;
+    highlights: number;
+    notes: number;
+    total: number;
+  };
 }

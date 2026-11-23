@@ -1,4 +1,5 @@
 mod db;
+mod export;
 mod import;
 
 use std::fs;
@@ -26,7 +27,11 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![import::import_book_file])
+        .invoke_handler(tauri::generate_handler![
+            import::import_book_file,
+            export::export_markdown_file,
+            export::export_obsidian_vault
+        ])
         .setup(|app| {
             ensure_local_storage(app.handle())?;
             Ok(())

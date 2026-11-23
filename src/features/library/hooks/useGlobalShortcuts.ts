@@ -9,6 +9,7 @@ const ALT_NAV_SHORTCUTS: Record<string, NavigationSection> = {
   '4': 'highlights',
   '5': 'favorites',
   '6': 'stats',
+  '7': 'notes',
 };
 
 function isEditableElement(target: EventTarget | null): boolean {
@@ -75,6 +76,7 @@ export function useGlobalShortcuts(
           state.selectedItemId === null &&
           !state.commandPaletteOpen &&
           state.activeSection !== 'highlights' &&
+          state.activeSection !== 'notes' &&
           state.activeSection !== 'stats' &&
           selectAllHandlerRef.current
         ) {

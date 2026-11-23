@@ -1,7 +1,11 @@
 import { getDb } from '@/services/db';
+import { formatLocalDateKey } from '@/services/studySessionRepository';
 import {
   ITEM_STATUSES,
   ITEM_TYPES,
+  type ActivityBucket,
+  type ActivityRange,
+  type ActivityStatsSnapshot,
   type ItemStatus,
   type ItemType,
   type LibraryItem,
@@ -221,5 +225,174 @@ export async function getReadingStats(): Promise<ReadingStatsSnapshot> {
           highlightsCount: 0,
         },
     ),
+  };
+}
+
+function parseIsoToLocalMonthKey(iso: string): string | null {
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+}
+
+function parseIsoToLocalDateKey(iso: string): string | null {
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return formatLocalDateKey(parsed);
+}
+
+const MONTH_SHORT_FMT = new Intl.DateTimeFormat('es', { month: 'short' });
+const DAY_SHORT_FMT = new Intl.DateTimeFormat('es', {
+  day: 'numeric',
+  month: 'short',
+});
+const DAY_FULL_FMT = new Intl.DateTimeFormat('es', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
+const WEEKDAY_DAY_FMT = new Intl.DateTimeFormat('es', {
+  weekday: 'short',
+  day: 'numeric',
+});
+
+function formatMonthShortCap(date: Date): string {
+  const raw = MONTH_SHORT_FMT.format(date).replace(/\.$/, '');
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
+function buildActivityBuckets(range: ActivityRange): ActivityBucket[] {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0, 0);
+  const buckets: ActivityBucket[] = [];
+
+  if (range === '6m') {
+    for (let offset = 5; offset >= 0; offset -= 1) {
+      const date = new Date(today.getFullYear(), today.getMonth() - offset, 1, 12, 0, 0, 0);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const shortLabel = formatMonthShortCap(date);
+      buckets.push({
+        key: `${year}-${month}`,
+        label: shortLabel,
+        fullLabel: `${shortLabel} ${year}`,
+        addedCount: 0,
+        finishedCount: 0,
+        highlightsCount: 0,
+        notesCount: 0,
+      });
+    }
+    return buckets;
+  }
+
+  const dayCount = range === '7d' ? 7 : 30;
+  for (let offset = dayCount - 1; offset >= 0; offset -= 1) {
+    const date = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate() - offset,
+      12,
+      0,
+      0,
+      0,
+    );
+    const key = formatLocalDateKey(date);
+    const label =
+      range === '7d'
+        ? WEEKDAY_DAY_FMT.format(date).replace(/\.$/, '')
+        : DAY_SHORT_FMT.format(date).replace(/\.$/, '');
+    const fullLabel = DAY_FULL_FMT.format(date).replace(/\.$/, '');
+    buckets.push({
+      key,
+      label,
+      fullLabel,
+      addedCount: 0,
+      finishedCount: 0,
+      highlightsCount: 0,
+      notesCount: 0,
+    });
+  }
+
+  return buckets;
+}
+
+/**
+ * Aggregates added items, finished items, highlights, and Markdown notes across 6m, 30d, or 7d.
+ */
+export async function getActivityStats(
+  range: ActivityRange,
+): Promise<ActivityStatsSnapshot> {
+  const db = await getDb();
+
+  const [itemRows, highlightRows, noteRows] = await Promise.all([
+    db.select<Array<{ status: ItemStatus; created_at: string; updated_at: string }>>(
+      'SELECT status, created_at, updated_at FROM items',
+    ),
+    db.select<Array<{ created_at: string }>>(
+      'SELECT created_at FROM highlights',
+    ),
+    db.select<Array<{ created_at: string }>>(
+      'SELECT created_at FROM notes',
+    ),
+  ]);
+
+  const buckets = buildActivityBuckets(range);
+  const bucketMap = new Map(buckets.map((bucket) => [bucket.key, bucket]));
+  const toKey =
+    range === '6m' ? parseIsoToLocalMonthKey : parseIsoToLocalDateKey;
+
+  for (const item of itemRows) {
+    const addedKey = toKey(item.created_at);
+    if (addedKey) {
+      const bucket = bucketMap.get(addedKey);
+      if (bucket) bucket.addedCount += 1;
+    }
+    if (item.status === 'finished') {
+      const finishedKey = toKey(item.updated_at);
+      if (finishedKey) {
+        const bucket = bucketMap.get(finishedKey);
+        if (bucket) bucket.finishedCount += 1;
+      }
+    }
+  }
+
+  for (const highlight of highlightRows) {
+    const key = toKey(highlight.created_at);
+    if (key) {
+      const bucket = bucketMap.get(key);
+      if (bucket) bucket.highlightsCount += 1;
+    }
+  }
+
+  for (const note of noteRows) {
+    const key = toKey(note.created_at);
+    if (key) {
+      const bucket = bucketMap.get(key);
+      if (bucket) bucket.notesCount += 1;
+    }
+  }
+
+  let added = 0;
+  let finished = 0;
+  let highlights = 0;
+  let notes = 0;
+  for (const bucket of buckets) {
+    added += bucket.addedCount;
+    finished += bucket.finishedCount;
+    highlights += bucket.highlightsCount;
+    notes += bucket.notesCount;
+  }
+
+  return {
+    range,
+    buckets,
+    totals: {
+      added,
+      finished,
+      highlights,
+      notes,
+      total: added + finished + highlights + notes,
+    },
   };
 }

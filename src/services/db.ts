@@ -10,8 +10,11 @@ const EXPECTED_TABLES = [
   'tags',
   'item_tags',
   'highlights',
+  'study_sessions',
+  'notes',
   'items_fts',
   'highlights_fts',
+  'notes_fts',
 ] as const;
 
 let dbPromise: Promise<Database> | null = null;

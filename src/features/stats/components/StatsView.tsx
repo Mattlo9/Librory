@@ -13,6 +13,8 @@ import { CoverImage } from '@/components/ui/cover-image';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAssetUrl } from '@/features/library/hooks/useAssetUrl';
+import { ActivityChartCard } from '@/features/stats/components/ActivityChartCard';
+import { StudyOverviewCard } from '@/features/stats/components/StudyOverviewCard';
 import { useReadingStats } from '@/features/stats/hooks/useReadingStats';
 import { isItemReadableLocally } from '@/lib/highlights';
 import { ITEM_STATUS_LABELS, ITEM_TYPE_LABELS } from '@/lib/text';
@@ -45,6 +47,7 @@ const STATS_LOADING_SKELETON = (
     aria-label="Cargando estadísticas"
     className="mx-auto max-w-6xl space-y-6 px-6 py-6"
   >
+    <Skeleton className="h-72 rounded-xl" />
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       {Array.from({ length: 4 }, (_, idx) => (
         <Skeleton key={idx} className="h-28 rounded-xl" />
@@ -192,18 +195,22 @@ export function StatsView({
   const stats = statsQuery.data;
   if (!stats || stats.totals.totalItems === 0) {
     return (
-      <div className="px-6 py-16">
-        <EmptyState
-          icon={<BarChart3 className="size-5" />}
-          title="Aún no hay datos de lectura"
-          description="Importa libros o documentos a tu biblioteca para seguir tus libros terminados, páginas leídas y ritmo mensual."
-          actions={
-            <Button type="button" size="sm" onClick={onImportFiles}>
-              <Upload className="size-4" />
-              Importar PDF / EPUB
-            </Button>
-          }
-        />
+      <div className="mx-auto max-w-6xl space-y-6 px-6 py-6">
+        <StudyOverviewCard onOpenItem={onOpenItem} />
+        <ActivityChartCard />
+        <div className="py-8">
+          <EmptyState
+            icon={<BarChart3 className="size-5" />}
+            title="Aún no hay datos de lectura"
+            description="Importa libros o documentos a tu biblioteca para seguir tus libros terminados, páginas leídas y ritmo mensual."
+            actions={
+              <Button type="button" size="sm" onClick={onImportFiles}>
+                <Upload className="size-4" />
+                Importar PDF / EPUB
+              </Button>
+            }
+          />
+        </div>
       </div>
     );
   }
@@ -217,15 +224,11 @@ export function StatsView({
         )
       : 0;
 
-  const maxMonthlyCount = Math.max(
-    1,
-    ...stats.monthlyActivity.map((m) =>
-      Math.max(m.addedCount, m.finishedCount, m.highlightsCount),
-    ),
-  );
-
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-6 py-6">
+      {/* 0. Resumen de estudio Pomodoro y mapa de calor */}
+      <StudyOverviewCard onOpenItem={onOpenItem} />
+
       {/* 1. Tarjetas KPI */}
       <section
         aria-label="Resumen de lectura"
@@ -468,87 +471,8 @@ export function StatsView({
         </div>
       </section>
 
-      {/* 4. Actividad últimos 6 meses */}
-      <section className="rounded-xl border border-border bg-card p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold tracking-tight text-foreground">
-              Actividad de los últimos 6 meses
-            </h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Recursos añadidos, terminados y subrayados creados por mes.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-4 text-[11px] text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <span className="size-2.5 rounded-sm bg-accent-brand" />
-              Añadidos
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="size-2.5 rounded-sm bg-emerald-500" />
-              Terminados
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="size-2.5 rounded-sm bg-amber-400" />
-              Subrayados
-            </span>
-          </div>
-        </div>
-
-        <div className="mt-6 grid grid-cols-6 gap-3">
-          {stats.monthlyActivity.map((month) => {
-            const addedH = Math.round((month.addedCount / maxMonthlyCount) * 100);
-            const finishedH = Math.round(
-              (month.finishedCount / maxMonthlyCount) * 100,
-            );
-            const highlightsH = Math.round(
-              (month.highlightsCount / maxMonthlyCount) * 100,
-            );
-
-            return (
-              <div
-                key={month.monthKey}
-                title={`${month.label}: ${month.addedCount} añadidos · ${month.finishedCount} terminados · ${month.highlightsCount} subrayados`}
-                className="flex flex-col items-center gap-2"
-              >
-                <div className="flex h-32 w-full items-end justify-center gap-1.5 rounded-lg border border-border/50 bg-secondary/25 px-2 pt-3 pb-2">
-                  <div
-                    className="w-2.5 rounded-t bg-accent-brand transition-[height]"
-                    style={{
-                      height:
-                        month.addedCount > 0 ? `${Math.max(8, addedH)}%` : '2px',
-                      opacity: month.addedCount > 0 ? 1 : 0.2,
-                    }}
-                  />
-                  <div
-                    className="w-2.5 rounded-t bg-emerald-500 transition-[height]"
-                    style={{
-                      height:
-                        month.finishedCount > 0
-                          ? `${Math.max(8, finishedH)}%`
-                          : '2px',
-                      opacity: month.finishedCount > 0 ? 1 : 0.2,
-                    }}
-                  />
-                  <div
-                    className="w-2.5 rounded-t bg-amber-400 transition-[height]"
-                    style={{
-                      height:
-                        month.highlightsCount > 0
-                          ? `${Math.max(8, highlightsH)}%`
-                          : '2px',
-                      opacity: month.highlightsCount > 0 ? 1 : 0.2,
-                    }}
-                  />
-                </div>
-                <span className="font-mono text-[11px] text-muted-foreground">
-                  {month.label}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </section>
+      {/* 4. Actividad apilada por rango */}
+      <ActivityChartCard />
 
       {/* 5. Estanterías y terminados recientes */}
       <section className="grid gap-5 lg:grid-cols-2">

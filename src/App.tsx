@@ -1,6 +1,8 @@
 import { FolderPlus, Library, Sparkles, Terminal, Upload } from 'lucide-react';
 import { lazy, Suspense, useCallback, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { PomodoroEngine } from '@/features/pomodoro/components/PomodoroEngine';
+import { PomodoroNoticeBanner } from '@/features/pomodoro/components/PomodoroNoticeBanner';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { EmptyState } from '@/components/ui/empty-state';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
@@ -82,6 +84,11 @@ const LazyStatsView = lazy(() =>
     default: m.StatsView,
   })),
 );
+const LazyNotesView = lazy(() =>
+  import('@/features/notes/components/NotesView').then((m) => ({
+    default: m.NotesView,
+  })),
+);
 
 function preloadCommandPalette(): void {
   void loadCommandPalette();
@@ -106,6 +113,7 @@ const EMPTY_NAV_COUNTS = {
   favorites: 0,
   recent: 0,
   highlights: 0,
+  notes: 0,
 };
 
 const EMPTY_TYPE_COUNTS: Record<ItemType | 'all', number> = {
@@ -378,8 +386,9 @@ export function App() {
   }
 
   const isHighlightsView = activeSection === 'highlights';
+  const isNotesView = activeSection === 'notes';
   const isStatsView = activeSection === 'stats';
-  const isSecondaryView = isHighlightsView || isStatsView;
+  const isSecondaryView = isHighlightsView || isNotesView || isStatsView;
   const hasActiveFilters =
     activeTypeFilter !== 'all' ||
     (activeSection !== 'inbox' && activeStatusFilter !== 'all');
@@ -387,6 +396,8 @@ export function App() {
 
   return (
     <>
+      <PomodoroEngine />
+      <PomodoroNoticeBanner />
       {readerTarget ? (
         <div className="h-screen w-screen overflow-hidden bg-background">
           <Suspense fallback={READER_LOADING_SKELETON}>
@@ -436,12 +447,25 @@ export function App() {
               />
             ) : null}
 
-            <div className="scrollbar-subtle flex-1 overflow-y-auto">
+            <div
+              className={
+                isNotesView
+                  ? 'flex min-h-0 flex-1 flex-col overflow-hidden'
+                  : 'scrollbar-subtle flex-1 overflow-y-auto'
+              }
+            >
               {isHighlightsView ? (
                 <Suspense fallback={LIBRARY_LOADING_SKELETON}>
                   <LazyHighlightsView
                     onOpenItem={setSelectedItemId}
                     onOpenInReader={openReader}
+                  />
+                </Suspense>
+              ) : isNotesView ? (
+                <Suspense fallback={LIBRARY_LOADING_SKELETON}>
+                  <LazyNotesView
+                    onOpenItem={setSelectedItemId}
+                    onOpenReader={openReader}
                   />
                 </Suspense>
               ) : isStatsView ? (

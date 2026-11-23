@@ -10,6 +10,7 @@ import {
   Inbox,
   Library,
   MoreHorizontal,
+  NotebookPen,
   Pencil,
   Plus,
   Search,
@@ -67,6 +68,7 @@ interface SidebarProps {
     favorites: number;
     recent: number;
     highlights: number;
+    notes: number;
   };
   shelves: ShelfWithCount[];
   tags: TagWithCount[];
@@ -82,6 +84,7 @@ const LIBRARY_ICON = <Library className="size-4" />;
 const FAVORITES_ICON = <Star className="size-4" />;
 const RECENT_ICON = <Clock className="size-4" />;
 const HIGHLIGHTS_ICON = <Highlighter className="size-4" />;
+const NOTES_ICON = <NotebookPen className="size-4" />;
 const STATS_ICON = <BarChart3 className="size-4" />;
 
 interface PrimaryNavItemProps {
@@ -287,6 +290,7 @@ export const Sidebar = memo(function Sidebar({
     () => navigate('highlights'),
     [navigate],
   );
+  const handleSelectNotes = useCallback(() => navigate('notes'), [navigate]);
   const handleSelectStats = useCallback(() => navigate('stats'), [navigate]);
   const handleSelectShelf = useCallback(
     (shelfId: string) => navigate({ kind: 'shelf', shelfId }),
@@ -377,6 +381,13 @@ export const Sidebar = memo(function Sidebar({
                     count={navCounts.highlights}
                     active={activeSection === 'highlights'}
                     onSelect={handleSelectHighlights}
+                  />
+                  <PrimaryNavItem
+                    icon={NOTES_ICON}
+                    label="Notas"
+                    count={navCounts.notes}
+                    active={activeSection === 'notes'}
+                    onSelect={handleSelectNotes}
                   />
                   <PrimaryNavItem
                     icon={STATS_ICON}

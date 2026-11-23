@@ -38,6 +38,7 @@ import {
 import { collectDescendantShelfIds } from '@/lib/shelfTree';
 import { getNavigationSectionKey } from '@/store/uiStore';
 import type {
+  ActivityRange,
   CreateHighlightInput,
   CreateItemInput,
   ItemFilter,
@@ -47,6 +48,7 @@ import type {
   SaveReadingProgressInput,
   ShelfWithCount,
   SortOption,
+  StudyStatsRange,
   UpdateHighlightInput,
   UpdateItemInput,
 } from '@/types/domain';
@@ -81,7 +83,18 @@ export const libraryKeys = {
   searchHighlightsFtsRoot: ['library', 'search-highlights-fts'] as const,
   searchHighlightsFts: (query: string) =>
     ['library', 'search-highlights-fts', query] as const,
+  notes: ['library', 'notes'] as const,
+  searchNotesFtsRoot: ['library', 'search-notes-fts'] as const,
+  searchNotesFts: (query: string) =>
+    ['library', 'search-notes-fts', query] as const,
   stats: ['library', 'stats'] as const,
+  activityStatsRoot: ['library', 'activity-stats'] as const,
+  activityStats: (range: ActivityRange) =>
+    ['library', 'activity-stats', range] as const,
+  studyStatsRoot: ['library', 'study-stats'] as const,
+  studyStats: (range: StudyStatsRange) =>
+    ['library', 'study-stats', range] as const,
+  pomodoroBookOptions: ['library', 'pomodoro-books'] as const,
   hasSample: ['library', 'has-sample'] as const,
 };
 
@@ -161,7 +174,11 @@ export function useTypeCounts(
       baseFilter.shelfIds ?? [],
     ],
     queryFn: () => getItemCountsByType(baseFilter),
-    enabled: tauriActive && section !== 'highlights' && section !== 'stats',
+    enabled:
+      tauriActive &&
+      section !== 'highlights' &&
+      section !== 'notes' &&
+      section !== 'stats',
   });
 }
 
@@ -187,6 +204,7 @@ export function useStatusCounts(
     enabled:
       tauriActive &&
       section !== 'highlights' &&
+      section !== 'notes' &&
       section !== 'stats' &&
       section !== 'inbox',
   });
@@ -212,7 +230,11 @@ export function useLibraryItems(
       filter.shelfIds ?? [],
     ],
     queryFn: () => listItemsWithRelations(filter),
-    enabled: tauriActive && section !== 'highlights' && section !== 'stats',
+    enabled:
+      tauriActive &&
+      section !== 'highlights' &&
+      section !== 'notes' &&
+      section !== 'stats',
   });
 }
 
@@ -301,7 +323,10 @@ export function useUpdateItem() {
         }),
         queryClient.invalidateQueries({ queryKey: libraryKeys.searchFtsRoot }),
         queryClient.invalidateQueries({ queryKey: libraryKeys.highlights }),
-        queryClient.invalidateQueries({ queryKey: libraryKeys.stats }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.notes }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.activityStatsRoot }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.studyStatsRoot }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.pomodoroBookOptions }),
       ]);
     },
   });
@@ -444,6 +469,8 @@ export function useSaveReadingProgress() {
           queryKey: libraryKeys.itemDetail(variables.itemId),
         }),
         queryClient.invalidateQueries({ queryKey: libraryKeys.stats }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.activityStatsRoot }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.pomodoroBookOptions }),
       ]);
     },
   });
@@ -464,6 +491,7 @@ export function useCreateHighlight() {
         }),
         queryClient.invalidateQueries({ queryKey: libraryKeys.navCounts }),
         queryClient.invalidateQueries({ queryKey: libraryKeys.stats }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.activityStatsRoot }),
       ]);
     },
   });
@@ -507,6 +535,7 @@ export function useDeleteHighlight() {
         }),
         queryClient.invalidateQueries({ queryKey: libraryKeys.navCounts }),
         queryClient.invalidateQueries({ queryKey: libraryKeys.stats }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.activityStatsRoot }),
       ]);
     },
   });

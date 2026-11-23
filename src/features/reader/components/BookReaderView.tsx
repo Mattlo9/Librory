@@ -1,9 +1,10 @@
 import { ArrowLeft, BookOpen } from 'lucide-react';
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useItemDetail } from '@/features/library/hooks/useLibraryData';
+import { usePomodoroStore } from '@/store/pomodoroStore';
 
 const LazyPdfReaderView = lazy(() =>
   import('@/features/reader/components/PdfReaderView').then((m) => ({
@@ -46,6 +47,22 @@ export function BookReaderView({
 }: BookReaderViewProps) {
   const detailQuery = useItemDetail(itemId);
   const item = detailQuery.data ?? null;
+
+  useEffect(() => {
+    if (item) {
+      usePomodoroStore
+        .getState()
+        .setReaderBook({ id: item.id, title: item.title });
+    } else {
+      usePomodoroStore.getState().setReaderBook(null);
+    }
+  }, [item]);
+
+  useEffect(() => {
+    return () => {
+      usePomodoroStore.getState().setReaderBook(null);
+    };
+  }, []);
 
   if (detailQuery.isLoading) {
     return READER_FALLBACK;

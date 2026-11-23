@@ -66,7 +66,7 @@ export const BookShelfGrid = memo(function BookShelfGrid({
       {groups.map((group) => (
         <section
           key={group.key}
-          className="space-y-4 [content-visibility:auto] [contain-intrinsic-size:auto_320px]"
+          className="-mx-2 space-y-4 px-2 [content-visibility:auto] [contain-intrinsic-size:auto_320px]"
         >
           {group.segments.length > 0 ? (
             <header className="flex items-center gap-3">

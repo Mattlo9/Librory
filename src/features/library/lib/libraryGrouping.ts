@@ -36,6 +36,9 @@ export function getSectionHeading(
   if (section === 'highlights') {
     return { title: 'Highlights', segments: ['Highlights'] };
   }
+  if (section === 'notes') {
+    return { title: 'Notas', segments: ['Notas'] };
+  }
   if (section === 'stats') {
     return { title: 'Estadísticas', segments: ['Estadísticas'] };
   }

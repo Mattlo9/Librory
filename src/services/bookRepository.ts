@@ -504,22 +504,27 @@ export async function getNavigationCounts(): Promise<{
   favorites: number;
   recent: number;
   highlights: number;
+  notes: number;
 }> {
   const db = await getDb();
-  const [statusRows, favoriteRows, recentRows, highlightsRows] = await Promise.all([
-    db.select<Array<{ status: ItemStatus; count: number }>>(
-      'SELECT status, COUNT(*) AS count FROM items GROUP BY status',
-    ),
-    db.select<Array<{ count: number }>>(
-      'SELECT COUNT(*) AS count FROM items WHERE is_favorite = 1',
-    ),
-    db.select<Array<{ count: number }>>(
-      'SELECT COUNT(*) AS count FROM items WHERE last_opened_at IS NOT NULL',
-    ),
-    db.select<Array<{ count: number }>>(
-      'SELECT COUNT(*) AS count FROM highlights',
-    ),
-  ]);
+  const [statusRows, favoriteRows, recentRows, highlightsRows, notesRows] =
+    await Promise.all([
+      db.select<Array<{ status: ItemStatus; count: number }>>(
+        'SELECT status, COUNT(*) AS count FROM items GROUP BY status',
+      ),
+      db.select<Array<{ count: number }>>(
+        'SELECT COUNT(*) AS count FROM items WHERE is_favorite = 1',
+      ),
+      db.select<Array<{ count: number }>>(
+        'SELECT COUNT(*) AS count FROM items WHERE last_opened_at IS NOT NULL',
+      ),
+      db.select<Array<{ count: number }>>(
+        'SELECT COUNT(*) AS count FROM highlights',
+      ),
+      db.select<Array<{ count: number }>>(
+        'SELECT COUNT(*) AS count FROM notes',
+      ),
+    ]);
 
   let inbox = 0;
   let all = 0;
@@ -536,6 +541,7 @@ export async function getNavigationCounts(): Promise<{
     favorites: favoriteRows[0]?.count ?? 0,
     recent: recentRows[0]?.count ?? 0,
     highlights: highlightsRows[0]?.count ?? 0,
+    notes: notesRows[0]?.count ?? 0,
   };
 }
 

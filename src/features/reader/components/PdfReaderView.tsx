@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ThemeMenu } from '@/components/ui/theme-menu';
+import { PomodoroWidget } from '@/features/pomodoro/components/PomodoroWidget';
 import {
   useCreateHighlight,
   useItemDetail,
@@ -670,6 +671,8 @@ export function PdfReaderView({
               {isFinished ? 'Terminado' : 'Marcar terminado'}
             </span>
           </Button>
+
+          <PomodoroWidget variant="reader" />
 
           <ThemeMenu variant="ghost" size="icon-xs" />
 

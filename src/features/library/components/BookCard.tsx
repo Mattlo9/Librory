@@ -23,7 +23,7 @@ interface BookCardProps {
 }
 
 const COVER_BOX_STYLE = {
-  height: 'calc(var(--cover-w, 158px) * 1.44)',
+  height: 'calc(var(--cover-w, 158px) * 1.5 + 16px)',
 } as const;
 
 export const BookCard = memo(function BookCard({
@@ -66,7 +66,7 @@ export const BookCard = memo(function BookCard({
       <ContextMenuTrigger asChild>
         <div className="group relative flex w-full flex-col text-left">
           <div
-            className="flex w-full items-end justify-center pb-2"
+            className="flex w-full items-end justify-center py-2"
             style={COVER_BOX_STYLE}
           >
             <div className="relative w-full transition-transform duration-200 ease-out group-hover:-translate-y-1 group-focus-within:-translate-y-1">
