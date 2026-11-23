@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import {
+  bulkUpdateItemsStatus,
   createItem,
   getItemCountsByStatus,
   getItemCountsByType,
@@ -23,12 +24,17 @@ import {
   updateHighlight,
 } from '@/services/highlightRepository';
 import {
+  bulkDeleteItemsAndFiles,
   clearItemCover,
   deleteItemAndFiles,
   openBookExternally,
   regenerateItemCover,
   revealBookInExplorer,
 } from '@/services/importService';
+import {
+  bulkAssignItemsToShelf,
+  bulkRemoveItemsFromShelf,
+} from '@/services/shelfRepository';
 import { collectDescendantShelfIds } from '@/lib/shelfTree';
 import { getNavigationSectionKey } from '@/store/uiStore';
 import type {
@@ -296,6 +302,49 @@ export function useDeleteItem() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteItemAndFiles(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: libraryKeys.all });
+    },
+  });
+}
+
+export function useBulkUpdateItemsStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ids, status }: { ids: string[]; status: ItemStatus }) =>
+      bulkUpdateItemsStatus(ids, status),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: libraryKeys.all });
+    },
+  });
+}
+
+export function useBulkAssignItemsToShelf() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemIds, shelfId }: { itemIds: string[]; shelfId: string }) =>
+      bulkAssignItemsToShelf(itemIds, shelfId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: libraryKeys.all });
+    },
+  });
+}
+
+export function useBulkRemoveItemsFromShelf() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemIds, shelfId }: { itemIds: string[]; shelfId: string }) =>
+      bulkRemoveItemsFromShelf(itemIds, shelfId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: libraryKeys.all });
+    },
+  });
+}
+
+export function useBulkDeleteItems() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => bulkDeleteItemsAndFiles(ids),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: libraryKeys.all });
     },

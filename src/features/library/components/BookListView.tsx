@@ -1,4 +1,5 @@
-import { memo, useMemo } from 'react';
+import { Check } from 'lucide-react';
+import { memo, useMemo, type MouseEvent } from 'react';
 import { Badge } from '@/components/ui/badge';
 import {
   ContextMenu,
@@ -13,6 +14,7 @@ import {
 import { useAssetUrl } from '@/features/library/hooks/useAssetUrl';
 import { isPdfReadableLocally } from '@/lib/highlights';
 import { ITEM_STATUS_LABELS, ITEM_TYPE_SINGULAR } from '@/lib/text';
+import { cn } from '@/lib/utils';
 import type {
   LibraryItemWithRelations,
   ShelfWithCount,
@@ -24,6 +26,8 @@ interface BookListViewProps {
   shelves: ShelfWithCount[];
   tags: TagWithCount[];
   bookActions: BookItemActions;
+  selectedIdsSet: ReadonlySet<string>;
+  selectionActive: boolean;
 }
 
 interface BookListRowProps {
@@ -31,6 +35,8 @@ interface BookListRowProps {
   shelfNameById: Map<string, string>;
   tagNameById: Map<string, string>;
   actions: BookItemActions;
+  selected: boolean;
+  selectionActive: boolean;
 }
 
 function takeResolvedNames(
@@ -54,6 +60,8 @@ const BookListRow = memo(function BookListRow({
   shelfNameById,
   tagNameById,
   actions,
+  selected,
+  selectionActive,
 }: BookListRowProps) {
   const assetUrl = useAssetUrl(item.cover_path, item.updated_at);
   const shelfNames = takeResolvedNames(item.shelf_ids, shelfNameById, 2);
@@ -64,22 +72,72 @@ const BookListRow = memo(function BookListRow({
       ? Math.min(100, Math.round((item.current_page / item.page_count) * 100))
       : 0;
 
+  const handleRowClick = (event: MouseEvent) => {
+    if (
+      (selectionActive || event.ctrlKey || event.metaKey || event.shiftKey) &&
+      actions.onToggleSelect
+    ) {
+      event.preventDefault();
+      actions.onToggleSelect(item.id, event.shiftKey);
+      return;
+    }
+    actions.onSelect(item.id);
+  };
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        <div className="group grid w-full grid-cols-[40px_minmax(0,2fr)_minmax(0,1.3fr)_120px_100px_110px_32px] items-center gap-4 rounded-lg px-3 py-2.5 text-left transition-colors [content-visibility:auto] [contain-intrinsic-size:64px] hover:bg-secondary/70 focus-within:bg-secondary/70">
+        <div
+          className={cn(
+            'group grid w-full grid-cols-[24px_40px_minmax(0,2fr)_minmax(0,1.3fr)_120px_100px_110px_32px] items-center gap-4 rounded-lg px-3 py-2.5 text-left transition-colors [content-visibility:auto] [contain-intrinsic-size:64px]',
+            selected
+              ? 'bg-accent-brand/10 ring-1 ring-inset ring-accent-brand/40 hover:bg-accent-brand/15'
+              : 'hover:bg-secondary/70 focus-within:bg-secondary/70',
+          )}
+        >
+          <div className="flex justify-center">
+            {actions.onToggleSelect ? (
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={selected}
+                aria-label={
+                  selected
+                    ? `Deseleccionar ${item.title}`
+                    : `Seleccionar ${item.title}`
+                }
+                onClick={(e) => {
+                  e.stopPropagation();
+                  actions.onToggleSelect?.(item.id, e.shiftKey);
+                }}
+                className={cn(
+                  'flex size-5 items-center justify-center rounded border outline-none transition-all focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring',
+                  selected
+                    ? 'border-accent-brand bg-accent-brand text-white opacity-100'
+                    : selectionActive
+                      ? 'border-border bg-background text-transparent opacity-100 hover:border-accent-brand/70'
+                      : 'border-border bg-background text-transparent opacity-0 hover:border-accent-brand/70 group-hover:opacity-100 group-focus-within:opacity-100',
+                )}
+              >
+                <Check className="size-3 stroke-[2.5]" />
+              </button>
+            ) : null}
+          </div>
+
           <button
             type="button"
-            onClick={() => actions.onSelect(item.id)}
+            onClick={handleRowClick}
             onDoubleClick={
-              canReadLocally && actions.onOpenReader
+              !selectionActive && canReadLocally && actions.onOpenReader
                 ? () => actions.onOpenReader?.(item.id)
                 : undefined
             }
             title={
-              canReadLocally
-                ? 'Clic para ver ficha · Doble clic para leer PDF'
-                : undefined
+              selectionActive
+                ? 'Clic para seleccionar · Shift+Clic para rango'
+                : canReadLocally
+                  ? 'Clic para ver ficha · Doble clic para leer PDF'
+                  : undefined
             }
             className="col-span-6 grid grid-cols-subgrid items-center gap-4 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
@@ -162,6 +220,8 @@ export function BookListView({
   shelves,
   tags,
   bookActions,
+  selectedIdsSet,
+  selectionActive,
 }: BookListViewProps) {
   const shelfNameById = useMemo(
     () => new Map(shelves.map((shelf) => [shelf.id, shelf.name])),
@@ -174,7 +234,8 @@ export function BookListView({
 
   return (
     <div className="px-6 py-4">
-      <div className="mb-1 grid grid-cols-[40px_minmax(0,2fr)_minmax(0,1.3fr)_120px_100px_110px_32px] gap-4 border-b border-border px-3 pb-2 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+      <div className="mb-1 grid grid-cols-[24px_40px_minmax(0,2fr)_minmax(0,1.3fr)_120px_100px_110px_32px] gap-4 border-b border-border px-3 pb-2 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+        <span />
         <span />
         <span>Título y autor</span>
         <span>Estanterías y etiquetas</span>
@@ -192,6 +253,8 @@ export function BookListView({
             shelfNameById={shelfNameById}
             tagNameById={tagNameById}
             actions={bookActions}
+            selected={selectedIdsSet.has(item.id)}
+            selectionActive={selectionActive}
           />
         ))}
       </div>

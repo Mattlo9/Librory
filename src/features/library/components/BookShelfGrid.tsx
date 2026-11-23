@@ -20,6 +20,8 @@ interface BookShelfGridProps {
   section: NavigationSection;
   groupByShelf: boolean;
   bookActions: BookItemActions;
+  selectedIdsSet: ReadonlySet<string>;
+  selectionActive: boolean;
   onSelectShelf: (shelfId: string) => void;
 }
 
@@ -29,6 +31,8 @@ export const BookShelfGrid = memo(function BookShelfGrid({
   section,
   groupByShelf,
   bookActions,
+  selectedIdsSet,
+  selectionActive,
   onSelectShelf,
 }: BookShelfGridProps) {
   const coverSize = useUiStore((s) => s.coverSize);
@@ -116,6 +120,8 @@ export const BookShelfGrid = memo(function BookShelfGrid({
                 key={`${group.key}:${item.id}`}
                 item={item}
                 actions={bookActions}
+                selected={selectedIdsSet.has(item.id)}
+                selectionActive={selectionActive}
               />
             ))}
           </div>

@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  CheckSquare,
   CircleDot,
   ExternalLink,
   MoreHorizontal,
@@ -43,6 +44,7 @@ export interface BookItemActions {
   onOpenExternally: (item: LibraryItemWithRelations) => void;
   onChangeStatus: (item: LibraryItemWithRelations, status: ItemStatus) => void;
   onRequestDelete: (item: LibraryItemWithRelations) => void;
+  onToggleSelect?: (id: string, shiftKey: boolean) => void;
 }
 
 interface MenuPrimitives {
@@ -126,6 +128,16 @@ function BookMenuBody({
         <Pencil className="size-3.5" />
         <span>Ver / editar ficha</span>
       </ui.Item>
+
+      {actions.onToggleSelect ? (
+        <ui.Item
+          className="text-xs"
+          onSelect={() => actions.onToggleSelect?.(item.id, false)}
+        >
+          <CheckSquare className="size-3.5" />
+          <span>Seleccionar</span>
+        </ui.Item>
+      ) : null}
 
       <ui.Separator />
 

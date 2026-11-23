@@ -1,6 +1,7 @@
 import {
   ArrowUpDown,
   BookMarked,
+  CheckSquare,
   ChevronLeft,
   ChevronRight,
   LayoutGrid,
@@ -65,6 +66,9 @@ export const LibraryHeader = memo(function LibraryHeader({
   const setSortBy = useUiStore((s) => s.setSortBy);
   const groupByShelf = useUiStore((s) => s.groupByShelf);
   const setGroupByShelf = useUiStore((s) => s.setGroupByShelf);
+  const selectionMode = useUiStore((s) => s.selectionMode);
+  const selectedCount = useUiStore((s) => s.selectedItemIds.length);
+  const setSelectionMode = useUiStore((s) => s.setSelectionMode);
   const setCommandPaletteOpen = useUiStore((s) => s.setCommandPaletteOpen);
 
   const canGoBack = historyIndex > 0;
@@ -237,6 +241,34 @@ export const LibraryHeader = memo(function LibraryHeader({
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant={selectionMode ? 'secondary' : 'outline'}
+                  size={selectedCount > 0 ? 'sm' : 'icon-sm'}
+                  aria-pressed={selectionMode}
+                  aria-label="Selección múltiple"
+                  onClick={() => setSelectionMode(!selectionMode)}
+                  className={cn(
+                    selectedCount > 0 && 'h-8 gap-1.5 px-2 text-xs',
+                    selectionMode &&
+                      'border-accent-brand/50 bg-accent-brand/15 text-foreground hover:bg-accent-brand/20',
+                  )}
+                >
+                  <CheckSquare className="size-3.5" />
+                  {selectedCount > 0 ? (
+                    <span className="font-mono text-[11px] tabular-nums">
+                      {selectedCount}
+                    </span>
+                  ) : null}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {selectionMode ? 'Salir de selección múltiple' : 'Selección múltiple'}
+              </TooltipContent>
+            </Tooltip>
           </>
         ) : null}
 

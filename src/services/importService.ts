@@ -1,7 +1,9 @@
 import {
+  bulkDeleteItems,
   createItem,
   deleteItem,
   getItemById,
+  getItemsFilePathsByIds,
   listAllFileHashes,
   updateItem,
 } from '@/services/bookRepository';
@@ -266,6 +268,23 @@ export async function deleteItemAndFiles(id: string): Promise<void> {
       removeStoredFile(item.cover_path),
     ]);
   }
+}
+
+export async function bulkDeleteItemsAndFiles(ids: string[]): Promise<void> {
+  const uniqueIds = Array.from(new Set(ids));
+  if (uniqueIds.length === 0) return;
+
+  const items = await getItemsFilePathsByIds(uniqueIds);
+  await bulkDeleteItems(uniqueIds);
+
+  const fileRemovals: Array<Promise<void>> = [];
+  for (const item of items) {
+    fileRemovals.push(removeStoredFile(item.file_path));
+    if (item.cover_path) {
+      fileRemovals.push(removeStoredFile(item.cover_path));
+    }
+  }
+  await Promise.all(fileRemovals);
 }
 
 export async function openBookExternally(item: LibraryItem): Promise<void> {

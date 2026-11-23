@@ -7,6 +7,7 @@ import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { BookItemActions } from '@/features/library/components/BookItemMenu';
 import { BookShelfGrid } from '@/features/library/components/BookShelfGrid';
+import { BulkActionBar } from '@/features/library/components/BulkActionBar';
 import { ImportDropOverlay } from '@/features/library/components/ImportDropOverlay';
 import { ImportStatusBanner } from '@/features/library/components/ImportStatusBanner';
 import { LibraryHeader } from '@/features/library/components/LibraryHeader';
@@ -157,6 +158,12 @@ export function App() {
   const commandPaletteOpen = useUiStore((s) => s.commandPaletteOpen);
   const selectedItemId = useUiStore((s) => s.selectedItemId);
   const setSelectedItemId = useUiStore((s) => s.setSelectedItemId);
+  const selectionMode = useUiStore((s) => s.selectionMode);
+  const selectedItemIds = useUiStore((s) => s.selectedItemIds);
+  const toggleItemSelection = useUiStore((s) => s.toggleItemSelection);
+  const selectItemRange = useUiStore((s) => s.selectItemRange);
+  const selectAllItems = useUiStore((s) => s.selectAllItems);
+  const clearSelection = useUiStore((s) => s.clearSelection);
   const readerTarget = useUiStore((s) => s.readerTarget);
   const openReader = useUiStore((s) => s.openReader);
   const closeReader = useUiStore((s) => s.closeReader);
@@ -204,9 +211,6 @@ export function App() {
     dismissSummary,
   } = useImportBooks(tauriActive);
 
-  useGlobalShortcuts(tauriActive, importFromDialog);
-  useEnsureStorageDirectories();
-
   const shelvesQuery = useShelves();
   const tagsQuery = useTags();
   const navCountsQuery = useNavigationCounts();
@@ -218,28 +222,6 @@ export function App() {
 
   const updateItemMutate = updateItem.mutate;
   const openBookExternallyMutateAsync = openBookExternally.mutateAsync;
-
-  const bookActions = useMemo<BookItemActions>(
-    () => ({
-      onSelect: setSelectedItemId,
-      onOpenReader: openReader,
-      onOpenExternally: (item) => {
-        void openBookExternallyMutateAsync(item);
-      },
-      onChangeStatus: (item, status) => {
-        updateItemMutate({ id: item.id, patch: { status } });
-      },
-      onRequestDelete: (item) => {
-        setItemPendingDelete(item);
-      },
-    }),
-    [
-      openBookExternallyMutateAsync,
-      openReader,
-      setSelectedItemId,
-      updateItemMutate,
-    ],
-  );
 
   const shelves = shelvesQuery.data ?? EMPTY_SHELVES;
   const tags = tagsQuery.data ?? EMPTY_TAGS;
@@ -266,6 +248,59 @@ export function App() {
   const typeCounts = typeCountsQuery.data ?? EMPTY_TYPE_COUNTS;
   const statusCounts = statusCountsQuery.data ?? EMPTY_STATUS_COUNTS;
   const items = itemsQuery.data ?? EMPTY_ITEMS;
+
+  const orderedItemIds = useMemo(
+    () => items.map((item) => item.id),
+    [items],
+  );
+  const selectedIdsSet = useMemo(
+    () => new Set(selectedItemIds),
+    [selectedItemIds],
+  );
+  const selectedItems = useMemo(
+    () => items.filter((item) => selectedIdsSet.has(item.id)),
+    [items, selectedIdsSet],
+  );
+  const selectionActive = selectionMode || selectedItems.length > 0;
+
+  const handleSelectAllVisible = useCallback(() => {
+    selectAllItems(orderedItemIds);
+  }, [orderedItemIds, selectAllItems]);
+
+  useGlobalShortcuts(tauriActive, importFromDialog, handleSelectAllVisible);
+  useEnsureStorageDirectories();
+
+  const bookActions = useMemo<BookItemActions>(
+    () => ({
+      onSelect: setSelectedItemId,
+      onOpenReader: openReader,
+      onOpenExternally: (item) => {
+        void openBookExternallyMutateAsync(item);
+      },
+      onChangeStatus: (item, status) => {
+        updateItemMutate({ id: item.id, patch: { status } });
+      },
+      onRequestDelete: (item) => {
+        setItemPendingDelete(item);
+      },
+      onToggleSelect: (id, shiftKey) => {
+        if (shiftKey) {
+          selectItemRange(orderedItemIds, id);
+        } else {
+          toggleItemSelection(id);
+        }
+      },
+    }),
+    [
+      openBookExternallyMutateAsync,
+      openReader,
+      orderedItemIds,
+      selectItemRange,
+      setSelectedItemId,
+      toggleItemSelection,
+      updateItemMutate,
+    ],
+  );
 
   const heading = useMemo(
     () => getSectionHeading(activeSection, shelves, tags),
@@ -478,6 +513,8 @@ export function App() {
                   section={activeSection}
                   groupByShelf={groupByShelf}
                   bookActions={bookActions}
+                  selectedIdsSet={selectedIdsSet}
+                  selectionActive={selectionActive}
                   onSelectShelf={handleSelectShelf}
                 />
               ) : (
@@ -487,6 +524,8 @@ export function App() {
                     shelves={shelves}
                     tags={tags}
                     bookActions={bookActions}
+                    selectedIdsSet={selectedIdsSet}
+                    selectionActive={selectionActive}
                   />
                 </Suspense>
               )}
@@ -501,6 +540,20 @@ export function App() {
             onGoToInbox={() => navigate('inbox')}
             onDismiss={dismissSummary}
           />
+          {!isHighlightsView ? (
+            <BulkActionBar
+              selectedItems={selectedItems}
+              totalVisibleCount={items.length}
+              shelves={shelves}
+              onSelectAll={handleSelectAllVisible}
+              onClear={clearSelection}
+              onDeletedIds={(ids) => {
+                if (selectedItemId && ids.includes(selectedItemId)) {
+                  setSelectedItemId(null);
+                }
+              }}
+            />
+          ) : null}
         </SidebarProvider>
       )}
 

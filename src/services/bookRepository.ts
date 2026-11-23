@@ -300,6 +300,65 @@ export async function deleteItem(id: string): Promise<void> {
   await db.execute('DELETE FROM items WHERE id = $1', [id]);
 }
 
+export async function bulkUpdateItemsStatus(
+  ids: string[],
+  status: ItemStatus,
+): Promise<void> {
+  const uniqueIds = Array.from(new Set(ids));
+  if (uniqueIds.length === 0) return;
+
+  const db = await getDb();
+  const now = new Date().toISOString();
+
+  for (let i = 0; i < uniqueIds.length; i += SQLITE_IN_CHUNK_SIZE) {
+    const chunk = uniqueIds.slice(i, i + SQLITE_IN_CHUNK_SIZE);
+    const placeholders = chunk.map((_, idx) => `$${idx + 3}`).join(', ');
+    await db.execute(
+      `UPDATE items SET status = $1, updated_at = $2 WHERE id IN (${placeholders})`,
+      [status, now, ...chunk],
+    );
+  }
+}
+
+export async function getItemsFilePathsByIds(
+  ids: string[],
+): Promise<Array<{ id: string; file_path: string; cover_path: string | null }>> {
+  const uniqueIds = Array.from(new Set(ids));
+  if (uniqueIds.length === 0) return [];
+
+  const db = await getDb();
+  const rows: Array<{ id: string; file_path: string; cover_path: string | null }> = [];
+
+  for (let i = 0; i < uniqueIds.length; i += SQLITE_IN_CHUNK_SIZE) {
+    const chunk = uniqueIds.slice(i, i + SQLITE_IN_CHUNK_SIZE);
+    const placeholders = chunk.map((_, idx) => `$${idx + 1}`).join(', ');
+    const chunkRows = await db.select<
+      Array<{ id: string; file_path: string; cover_path: string | null }>
+    >(
+      `SELECT id, file_path, cover_path FROM items WHERE id IN (${placeholders})`,
+      chunk,
+    );
+    rows.push(...chunkRows);
+  }
+
+  return rows;
+}
+
+export async function bulkDeleteItems(ids: string[]): Promise<void> {
+  const uniqueIds = Array.from(new Set(ids));
+  if (uniqueIds.length === 0) return;
+
+  const db = await getDb();
+  for (let i = 0; i < uniqueIds.length; i += SQLITE_IN_CHUNK_SIZE) {
+    const chunk = uniqueIds.slice(i, i + SQLITE_IN_CHUNK_SIZE);
+    const placeholders = chunk.map((_, idx) => `$${idx + 1}`).join(', ');
+    await db.execute(
+      `DELETE FROM items WHERE id IN (${placeholders})`,
+      chunk,
+    );
+  }
+}
+
 export async function saveReadingProgress(
   input: SaveReadingProgressInput,
 ): Promise<LibraryItem | null> {

@@ -29,17 +29,58 @@ function isEditableElement(target: EventTarget | null): boolean {
 export function useGlobalShortcuts(
   enabled: boolean,
   onImportFiles?: () => void,
+  onSelectAllVisible?: () => void,
 ): void {
   const importHandlerRef = useRef(onImportFiles);
+  const selectAllHandlerRef = useRef(onSelectAllVisible);
 
   useEffect(() => {
     importHandlerRef.current = onImportFiles;
   }, [onImportFiles]);
 
   useEffect(() => {
+    selectAllHandlerRef.current = onSelectAllVisible;
+  }, [onSelectAllVisible]);
+
+  useEffect(() => {
     if (!enabled) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        const state = useUiStore.getState();
+        if (
+          state.readerTarget === null &&
+          state.selectedItemId === null &&
+          !state.commandPaletteOpen &&
+          (state.selectedItemIds.length > 0 || state.selectionMode)
+        ) {
+          event.preventDefault();
+          state.clearSelection();
+        }
+        return;
+      }
+
+      if (
+        event.key.toLowerCase() === 'a' &&
+        (event.ctrlKey || event.metaKey) &&
+        !event.shiftKey &&
+        !event.altKey &&
+        !isEditableElement(event.target)
+      ) {
+        const state = useUiStore.getState();
+        if (
+          state.readerTarget === null &&
+          state.selectedItemId === null &&
+          !state.commandPaletteOpen &&
+          state.activeSection !== 'highlights' &&
+          selectAllHandlerRef.current
+        ) {
+          event.preventDefault();
+          selectAllHandlerRef.current();
+        }
+        return;
+      }
+
       if (event.key.toLowerCase() === 'k' && (event.ctrlKey || event.metaKey)) {
         event.preventDefault();
         const { commandPaletteOpen, setCommandPaletteOpen } = useUiStore.getState();

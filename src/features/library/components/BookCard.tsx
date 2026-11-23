@@ -1,4 +1,5 @@
-import { memo } from 'react';
+import { Check } from 'lucide-react';
+import { memo, type MouseEvent } from 'react';
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -11,18 +12,26 @@ import {
 } from '@/features/library/components/BookItemMenu';
 import { useAssetUrl } from '@/features/library/hooks/useAssetUrl';
 import { isPdfReadableLocally } from '@/lib/highlights';
+import { cn } from '@/lib/utils';
 import type { LibraryItemWithRelations } from '@/types/domain';
 
 interface BookCardProps {
   item: LibraryItemWithRelations;
   actions: BookItemActions;
+  selected?: boolean;
+  selectionActive?: boolean;
 }
 
 const COVER_BOX_STYLE = {
   height: 'calc(var(--cover-w, 158px) * 1.44)',
 } as const;
 
-export const BookCard = memo(function BookCard({ item, actions }: BookCardProps) {
+export const BookCard = memo(function BookCard({
+  item,
+  actions,
+  selected = false,
+  selectionActive = false,
+}: BookCardProps) {
   const assetUrl = useAssetUrl(item.cover_path, item.updated_at);
   const canReadLocally = isPdfReadableLocally(item.file_path, item.file_format);
   const readingPercent =
@@ -30,14 +39,26 @@ export const BookCard = memo(function BookCard({ item, actions }: BookCardProps)
       ? Math.min(100, Math.round((item.current_page / item.page_count) * 100))
       : 0;
 
-  const handleOpenDetails = () => actions.onSelect(item.id);
+  const handleOpenDetails = (event: MouseEvent) => {
+    if (
+      (selectionActive || event.ctrlKey || event.metaKey || event.shiftKey) &&
+      actions.onToggleSelect
+    ) {
+      event.preventDefault();
+      actions.onToggleSelect(item.id, event.shiftKey);
+      return;
+    }
+    actions.onSelect(item.id);
+  };
   const handleDoubleClick =
-    canReadLocally && actions.onOpenReader
+    !selectionActive && canReadLocally && actions.onOpenReader
       ? () => actions.onOpenReader?.(item.id)
       : undefined;
-  const hoverHint = canReadLocally
-    ? 'Clic para ver ficha · Doble clic para leer PDF'
-    : undefined;
+  const hoverHint = selectionActive
+    ? 'Clic para seleccionar · Shift+Clic para rango'
+    : canReadLocally
+      ? 'Clic para ver ficha · Doble clic para leer PDF'
+      : undefined;
 
   return (
     <ContextMenu>
@@ -63,7 +84,10 @@ export const BookCard = memo(function BookCard({ item, actions }: BookCardProps)
                   type={item.type}
                   fileFormat={item.file_format}
                   assetUrl={assetUrl}
-                  className="transition-shadow duration-200 group-hover:ring-accent-brand/45 group-focus-within:ring-accent-brand/60"
+                  className={cn(
+                    'transition-shadow duration-200 group-hover:ring-accent-brand/45 group-focus-within:ring-accent-brand/60',
+                    selected && 'ring-2 ring-accent-brand',
+                  )}
                 />
                 {readingPercent > 0 ? (
                   <div
@@ -77,6 +101,33 @@ export const BookCard = memo(function BookCard({ item, actions }: BookCardProps)
                   </div>
                 ) : null}
               </button>
+
+              {actions.onToggleSelect ? (
+                <button
+                  type="button"
+                  role="checkbox"
+                  aria-checked={selected}
+                  aria-label={
+                    selected
+                      ? `Deseleccionar ${item.title}`
+                      : `Seleccionar ${item.title}`
+                  }
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    actions.onToggleSelect?.(item.id, e.shiftKey);
+                  }}
+                  className={cn(
+                    'absolute top-2 left-2 z-10 flex size-6 items-center justify-center rounded-md border shadow-sm backdrop-blur-sm outline-none transition-all focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring',
+                    selected
+                      ? 'border-accent-brand bg-accent-brand text-white opacity-100'
+                      : selectionActive
+                        ? 'border-border/90 bg-popover/90 text-transparent opacity-100 hover:border-accent-brand/70'
+                        : 'border-border/80 bg-popover/90 text-transparent opacity-0 hover:border-accent-brand/70 group-hover:opacity-100 group-focus-within:opacity-100',
+                  )}
+                >
+                  <Check className="size-3.5 stroke-[2.5]" />
+                </button>
+              ) : null}
 
               <BookDropdownMenu
                 item={item}
