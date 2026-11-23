@@ -398,6 +398,41 @@ export async function getItemCountsByType(
   return counts;
 }
 
+export async function getItemCountsByStatus(
+  filter: Omit<ItemFilter, 'status' | 'sortBy' | 'limit'> = {},
+): Promise<Record<ItemStatus | 'all', number>> {
+  const counts: Record<ItemStatus | 'all', number> = {
+    all: 0,
+    inbox: 0,
+    to_read: 0,
+    reading: 0,
+    reference: 0,
+    finished: 0,
+  };
+
+  const { emptyResult, joinsSql, whereSql, params } = buildFilterParts(filter);
+  if (emptyResult) {
+    return counts;
+  }
+
+  const db = await getDb();
+  const rows = await db.select<Array<{ status: ItemStatus; count: number }>>(
+    `SELECT i.status, COUNT(DISTINCT i.id) AS count
+     FROM items i
+     ${joinsSql}
+     ${whereSql}
+     GROUP BY i.status`,
+    params,
+  );
+
+  for (const row of rows) {
+    counts[row.status] = row.count;
+    counts.all += row.count;
+  }
+
+  return counts;
+}
+
 export async function getNavigationCounts(): Promise<{
   inbox: number;
   all: number;
