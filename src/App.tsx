@@ -24,6 +24,7 @@ import {
   useOpenBookExternally,
   useSeedSampleLibrary,
   useStatusCounts,
+  useToggleItemFavorite,
   useTypeCounts,
   useUpdateItem,
 } from '@/features/library/hooks/useLibraryData';
@@ -97,6 +98,7 @@ const READER_LOADING_SKELETON = (
 const EMPTY_NAV_COUNTS = {
   inbox: 0,
   all: 0,
+  favorites: 0,
   recent: 0,
   highlights: 0,
 };
@@ -218,9 +220,11 @@ export function App() {
   const seedSample = useSeedSampleLibrary();
   const updateItem = useUpdateItem();
   const deleteItem = useDeleteItem();
+  const toggleItemFavorite = useToggleItemFavorite();
   const openBookExternally = useOpenBookExternally();
 
   const updateItemMutate = updateItem.mutate;
+  const toggleItemFavoriteMutate = toggleItemFavorite.mutate;
   const openBookExternallyMutateAsync = openBookExternally.mutateAsync;
 
   const shelves = shelvesQuery.data ?? EMPTY_SHELVES;
@@ -280,6 +284,12 @@ export function App() {
       onChangeStatus: (item, status) => {
         updateItemMutate({ id: item.id, patch: { status } });
       },
+      onToggleFavorite: (item) => {
+        toggleItemFavoriteMutate({
+          id: item.id,
+          isFavorite: item.is_favorite !== 1,
+        });
+      },
       onRequestDelete: (item) => {
         setItemPendingDelete(item);
       },
@@ -297,6 +307,7 @@ export function App() {
       orderedItemIds,
       selectItemRange,
       setSelectedItemId,
+      toggleItemFavoriteMutate,
       toggleItemSelection,
       updateItemMutate,
     ],
@@ -473,11 +484,17 @@ export function App() {
                   ) : (
                     <EmptyState
                       icon={<Library className="size-5" />}
-                      title="No hay recursos en esta vista"
+                      title={
+                        activeSection === 'favorites'
+                          ? 'Aún no tienes recursos en Favoritos'
+                          : 'No hay recursos en esta vista'
+                      }
                       description={
                         hasActiveFilters
                           ? 'Prueba limpiando los filtros de tipo y estado para ver todos los elementos de esta sección.'
-                          : 'Aún no hay elementos asignados a esta estantería o etiqueta.'
+                          : activeSection === 'favorites'
+                            ? 'Marca cualquier libro con la estrella para acceder rápido desde aquí.'
+                            : 'Aún no hay elementos asignados a esta estantería o etiqueta.'
                       }
                       actions={
                         hasActiveFilters ? (

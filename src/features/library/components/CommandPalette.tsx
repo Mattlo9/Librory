@@ -13,6 +13,7 @@ import {
   Monitor,
   Moon,
   Sparkles,
+  Star,
   Sun,
   Tag,
   Upload,
@@ -71,6 +72,7 @@ interface QuickActionItem {
 const ACTION_ICONS = {
   inbox: <Inbox className="size-4" />,
   all: <Library className="size-4" />,
+  favorites: <Star className="size-4" />,
   recent: <Clock className="size-4" />,
   highlights: <Highlighter className="size-4" />,
   newShelf: <FolderPlus className="size-4" />,
@@ -168,6 +170,14 @@ export function CommandPalette({
         shortcut: 'Alt+2',
         icon: ACTION_ICONS.all,
         run: () => navigate('all'),
+      },
+      {
+        id: 'nav-favorites',
+        label: 'Ir a Favoritos',
+        keywords: 'favoritos destacados estrella starred',
+        shortcut: 'Alt+5',
+        icon: ACTION_ICONS.favorites,
+        run: () => navigate('favorites'),
       },
       {
         id: 'nav-recent',

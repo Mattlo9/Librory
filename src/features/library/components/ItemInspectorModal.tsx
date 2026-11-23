@@ -6,6 +6,7 @@ import {
   Hash,
   ImageDown,
   Plus,
+  Star,
   Trash2,
   Type,
 } from 'lucide-react';
@@ -34,6 +35,7 @@ import {
   useOpenBookExternally,
   useRegenerateItemCover,
   useRevealBookInExplorer,
+  useToggleItemFavorite,
   useUpdateItem,
 } from '@/features/library/hooks/useLibraryData';
 import {
@@ -95,6 +97,7 @@ function InspectorBody({
   const assetUrl = useAssetUrl(item.cover_path, item.updated_at);
   const updateItem = useUpdateItem();
   const deleteItem = useDeleteItem();
+  const toggleFavorite = useToggleItemFavorite();
   const regenerateCover = useRegenerateItemCover();
   const clearCover = useClearItemCover();
   const openBook = useOpenBookExternally();
@@ -245,6 +248,34 @@ function InspectorBody({
             </div>
           ) : null}
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant={item.is_favorite === 1 ? 'secondary' : 'outline'}
+          size="xs"
+          disabled={toggleFavorite.isPending}
+          aria-pressed={item.is_favorite === 1}
+          onClick={() =>
+            toggleFavorite.mutate({
+              id: item.id,
+              isFavorite: item.is_favorite !== 1,
+            })
+          }
+          className={cn(
+            item.is_favorite === 1 &&
+              'border-amber-500/40 bg-amber-500/12 text-amber-700 hover:bg-amber-500/20 dark:border-amber-400/40 dark:bg-amber-400/15 dark:text-amber-300',
+          )}
+        >
+          <Star
+            className={cn(
+              'size-3',
+              item.is_favorite === 1 && 'fill-current',
+            )}
+          />
+          {item.is_favorite === 1 ? 'Favorito' : 'Destacar'}
+        </Button>
       </div>
 
       {!isSample ? (

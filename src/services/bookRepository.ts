@@ -70,6 +70,10 @@ function buildFilterParts(filter: ItemFilter): {
     clauses.push(`i.type = $${params.length}`);
   }
 
+  if (filter.favoriteOnly) {
+    clauses.push('i.is_favorite = 1');
+  }
+
   if (filter.recentOnly) {
     clauses.push('i.last_opened_at IS NOT NULL');
   }
@@ -223,8 +227,8 @@ export async function createItem(input: CreateItemInput): Promise<LibraryItem> {
     `INSERT INTO items (
       id, title, author, type, status, file_path, cover_path,
       file_format, file_hash, file_size, page_count, current_page,
-      notes, created_at, updated_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+      is_favorite, notes, created_at, updated_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
     [
       id,
       input.title,
@@ -238,6 +242,7 @@ export async function createItem(input: CreateItemInput): Promise<LibraryItem> {
       input.file_size ?? 0,
       input.page_count ?? 0,
       input.current_page ?? 0,
+      input.is_favorite ?? 0,
       input.notes ?? '',
       now,
       now,
@@ -267,6 +272,7 @@ export async function updateItem(
     'cover_path',
     'page_count',
     'current_page',
+    'is_favorite',
     'notes',
     'last_opened_at',
   ];
@@ -495,13 +501,17 @@ export async function getItemCountsByStatus(
 export async function getNavigationCounts(): Promise<{
   inbox: number;
   all: number;
+  favorites: number;
   recent: number;
   highlights: number;
 }> {
   const db = await getDb();
-  const [statusRows, recentRows, highlightsRows] = await Promise.all([
+  const [statusRows, favoriteRows, recentRows, highlightsRows] = await Promise.all([
     db.select<Array<{ status: ItemStatus; count: number }>>(
       'SELECT status, COUNT(*) AS count FROM items GROUP BY status',
+    ),
+    db.select<Array<{ count: number }>>(
+      'SELECT COUNT(*) AS count FROM items WHERE is_favorite = 1',
     ),
     db.select<Array<{ count: number }>>(
       'SELECT COUNT(*) AS count FROM items WHERE last_opened_at IS NOT NULL',
@@ -523,6 +533,7 @@ export async function getNavigationCounts(): Promise<{
   return {
     inbox,
     all,
+    favorites: favoriteRows[0]?.count ?? 0,
     recent: recentRows[0]?.count ?? 0,
     highlights: highlightsRows[0]?.count ?? 0,
   };

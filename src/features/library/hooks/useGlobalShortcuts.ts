@@ -7,6 +7,7 @@ const ALT_NAV_SHORTCUTS: Record<string, NavigationSection> = {
   '2': 'all',
   '3': 'recent',
   '4': 'highlights',
+  '5': 'favorites',
 };
 
 function isEditableElement(target: EventTarget | null): boolean {

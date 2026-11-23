@@ -1,4 +1,4 @@
-import { Check } from 'lucide-react';
+import { Check, Star } from 'lucide-react';
 import { memo, type MouseEvent } from 'react';
 import {
   ContextMenu,
@@ -34,6 +34,7 @@ export const BookCard = memo(function BookCard({
 }: BookCardProps) {
   const assetUrl = useAssetUrl(item.cover_path, item.updated_at);
   const canReadLocally = isPdfReadableLocally(item.file_path, item.file_format);
+  const isFavorite = item.is_favorite === 1;
   const readingPercent =
     item.page_count > 0 && item.current_page > 0
       ? Math.min(100, Math.round((item.current_page / item.page_count) * 100))
@@ -128,6 +129,29 @@ export const BookCard = memo(function BookCard({
                   <Check className="size-3.5 stroke-[2.5]" />
                 </button>
               ) : null}
+
+              <button
+                type="button"
+                aria-label={
+                  isFavorite
+                    ? `Quitar ${item.title} de favoritos`
+                    : `Añadir ${item.title} a favoritos`
+                }
+                aria-pressed={isFavorite}
+                title={isFavorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  actions.onToggleFavorite(item);
+                }}
+                className={cn(
+                  'absolute top-2 right-10 z-10 flex size-7 items-center justify-center rounded-md border border-border/80 bg-popover/90 shadow-sm backdrop-blur-sm outline-none transition-opacity hover:bg-accent focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring',
+                  isFavorite
+                    ? 'text-amber-500 opacity-100 dark:text-amber-400'
+                    : 'text-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100',
+                )}
+              >
+                <Star className={cn('size-3.5', isFavorite && 'fill-current')} />
+              </button>
 
               <BookDropdownMenu
                 item={item}

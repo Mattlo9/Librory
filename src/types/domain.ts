@@ -36,6 +36,7 @@ export type HighlightColor = (typeof HIGHLIGHT_COLORS)[number];
 export type NavigationSection =
   | 'inbox'
   | 'all'
+  | 'favorites'
   | 'recent'
   | 'highlights'
   | { kind: 'shelf'; shelfId: string }
@@ -62,6 +63,7 @@ export interface LibraryItem {
   file_size: number;
   page_count: number;
   current_page: number;
+  is_favorite: number;
   notes: string;
   last_opened_at: string | null;
   created_at: string;
@@ -81,6 +83,7 @@ export interface CreateItemInput {
   file_size?: number;
   page_count?: number;
   current_page?: number;
+  is_favorite?: number;
   notes?: string;
 }
 
@@ -92,6 +95,7 @@ export interface UpdateItemInput {
   cover_path?: string | null;
   page_count?: number;
   current_page?: number;
+  is_favorite?: number;
   notes?: string;
   last_opened_at?: string | null;
 }
@@ -107,6 +111,7 @@ export interface ItemFilter {
   shelfId?: string;
   shelfIds?: string[];
   tagId?: string;
+  favoriteOnly?: boolean;
   recentOnly?: boolean;
   sortBy?: SortOption;
   limit?: number;
