@@ -72,9 +72,9 @@ const LazyTagDialog = lazy(() =>
     default: m.TagDialog,
   })),
 );
-const LazyPdfReaderView = lazy(() =>
-  import('@/features/reader/components/PdfReaderView').then((m) => ({
-    default: m.PdfReaderView,
+const LazyBookReaderView = lazy(() =>
+  import('@/features/reader/components/BookReaderView').then((m) => ({
+    default: m.BookReaderView,
   })),
 );
 
@@ -383,7 +383,7 @@ export function App() {
       {readerTarget ? (
         <div className="h-screen w-screen overflow-hidden bg-background">
           <Suspense fallback={READER_LOADING_SKELETON}>
-            <LazyPdfReaderView
+            <LazyBookReaderView
               key={readerTarget.itemId}
               itemId={readerTarget.itemId}
               initialPage={readerTarget.page}

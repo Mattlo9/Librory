@@ -12,7 +12,7 @@ import {
   type BookItemActions,
 } from '@/features/library/components/BookItemMenu';
 import { useAssetUrl } from '@/features/library/hooks/useAssetUrl';
-import { isPdfReadableLocally } from '@/lib/highlights';
+import { isItemReadableLocally } from '@/lib/highlights';
 import { ITEM_STATUS_LABELS, ITEM_TYPE_SINGULAR } from '@/lib/text';
 import { cn } from '@/lib/utils';
 import type {
@@ -66,7 +66,8 @@ const BookListRow = memo(function BookListRow({
   const assetUrl = useAssetUrl(item.cover_path, item.updated_at);
   const shelfNames = takeResolvedNames(item.shelf_ids, shelfNameById, 2);
   const tagNames = takeResolvedNames(item.tag_ids, tagNameById, 2);
-  const canReadLocally = isPdfReadableLocally(item.file_path, item.file_format);
+  const canReadLocally = isItemReadableLocally(item.file_path, item.file_format);
+  const unitSuffix = item.file_format === 'epub' ? 'c' : 'p';
   const isFavorite = item.is_favorite === 1;
   const readingPercent =
     item.page_count > 0 && item.current_page > 0
@@ -136,7 +137,7 @@ const BookListRow = memo(function BookListRow({
               selectionActive
                 ? 'Clic para seleccionar · Shift+Clic para rango'
                 : canReadLocally
-                  ? 'Clic para ver ficha · Doble clic para leer PDF'
+                  ? `Clic para ver ficha · Doble clic para leer ${item.file_format.toUpperCase()}`
                   : undefined
             }
             className="col-span-6 grid grid-cols-subgrid items-center gap-4 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -196,7 +197,7 @@ const BookListRow = memo(function BookListRow({
               {readingPercent > 0
                 ? ` · ${item.current_page}/${item.page_count}`
                 : item.page_count > 0
-                  ? ` · ${item.page_count}p`
+                  ? ` · ${item.page_count}${unitSuffix}`
                   : ''}
             </span>
           </button>

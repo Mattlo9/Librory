@@ -36,7 +36,7 @@ import {
   HIGHLIGHT_COLOR_LABELS,
   HIGHLIGHT_DOT_CLASS,
   HIGHLIGHT_SOFT_BG_CLASS,
-  isPdfReadableLocally,
+  isItemReadableLocally,
 } from '@/lib/highlights';
 import { cn } from '@/lib/utils';
 import {
@@ -335,10 +335,12 @@ export function HighlightsView({
               );
             }
 
-            const canOpenPdf = isPdfReadableLocally(
+            const canOpenLocally = isItemReadableLocally(
               entry.item_file_path,
               entry.item_file_format,
             );
+            const unitLabel =
+              entry.item_file_format === 'epub' ? 'cap.' : 'pág.';
 
             return (
               <article
@@ -363,7 +365,7 @@ export function HighlightsView({
                     <button
                       type="button"
                       onClick={() =>
-                        canOpenPdf
+                        canOpenLocally
                           ? onOpenInReader(
                               entry.item_id,
                               entry.page_number ?? undefined,
@@ -371,13 +373,13 @@ export function HighlightsView({
                           : onOpenItem(entry.item_id)
                       }
                       title={
-                        canOpenPdf
-                          ? 'Abrir en el lector PDF en esta página'
+                        canOpenLocally
+                          ? `Abrir en el lector ${entry.item_file_format.toUpperCase()}`
                           : 'Abrir ficha del recurso'
                       }
                       className="inline-flex min-w-0 items-center gap-1.5 truncate rounded-sm text-xs font-medium text-muted-foreground outline-none transition-colors hover:text-accent-brand focus-visible:text-accent-brand focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      {canOpenPdf ? (
+                      {canOpenLocally ? (
                         <BookOpen className="size-3.5 shrink-0 text-accent-brand" />
                       ) : null}
                       <span className="truncate">{entry.item_title}</span>
@@ -388,12 +390,12 @@ export function HighlightsView({
                       ) : null}
                       {entry.page_number ? (
                         <span className="ml-1 shrink-0 font-mono text-[11px] text-muted-foreground/80">
-                          pág. {entry.page_number}
+                          {unitLabel} {entry.page_number}
                         </span>
                       ) : null}
                     </button>
 
-                    {canOpenPdf ? (
+                    {canOpenLocally ? (
                       <button
                         type="button"
                         onClick={() => onOpenItem(entry.item_id)}

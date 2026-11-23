@@ -198,3 +198,118 @@ embedpdf-viewer {
   --epdf-tooltip: #18181d;
   --epdf-tooltip-text: #f4f4f5;
 }
+
+/* Tipografía editorial aislada para el lector integrado de EPUB */
+.epub-prose {
+  line-height: 1.72;
+  overflow-wrap: break-word;
+}
+
+.epub-prose h1,
+.epub-prose h2,
+.epub-prose h3,
+.epub-prose h4 {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  margin-top: 1.75em;
+  margin-bottom: 0.65em;
+}
+
+.epub-prose h1 {
+  font-size: 1.7em;
+}
+
+.epub-prose h2 {
+  font-size: 1.38em;
+}
+
+.epub-prose h3 {
+  font-size: 1.15em;
+}
+
+.epub-prose h1:first-child,
+.epub-prose h2:first-child,
+.epub-prose h3:first-child {
+  margin-top: 0;
+}
+
+.epub-prose p {
+  margin-bottom: 1.05em;
+}
+
+.epub-prose blockquote {
+  border-left: 2px solid var(--accent-brand);
+  padding-left: 1rem;
+  margin: 1.25em 0;
+  opacity: 0.9;
+  font-style: italic;
+}
+
+.epub-prose ul,
+.epub-prose ol {
+  margin: 1em 0;
+  padding-left: 1.5rem;
+}
+
+.epub-prose ul {
+  list-style-type: disc;
+}
+
+.epub-prose ol {
+  list-style-type: decimal;
+}
+
+.epub-prose li {
+  margin-bottom: 0.35em;
+}
+
+.epub-prose a {
+  color: var(--accent-brand);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.epub-prose pre,
+.epub-prose code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+}
+
+.epub-prose pre {
+  overflow-x: auto;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  padding: 0.85rem 1rem;
+  margin: 1.25em 0;
+  background-color: rgba(127, 127, 140, 0.08);
+}
+
+.epub-prose img,
+.epub-prose svg {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.375rem;
+  margin: 1rem auto;
+  display: block;
+}
+
+.epub-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.25em 0;
+  font-size: 0.9em;
+}
+
+.epub-prose th,
+.epub-prose td {
+  border: 1px solid var(--border);
+  padding: 0.45rem 0.65rem;
+  text-align: left;
+}
+
+.epub-prose hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 2rem 0;
+}

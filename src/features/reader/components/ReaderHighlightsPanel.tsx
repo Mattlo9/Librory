@@ -38,6 +38,7 @@ interface ReaderHighlightsPanelProps {
   itemAuthor: string;
   currentPage: number;
   numPages: number;
+  unitLabel?: string;
   highlights: Highlight[];
   draft: ReaderHighlightDraft | null;
   onDraftChange: (draft: ReaderHighlightDraft | null) => void;
@@ -51,6 +52,7 @@ export function ReaderHighlightsPanel({
   itemAuthor,
   currentPage,
   numPages,
+  unitLabel = 'pág.',
   highlights,
   draft,
   onDraftChange,
@@ -193,7 +195,7 @@ export function ReaderHighlightsPanel({
                 : 'text-muted-foreground hover:text-foreground',
             )}
           >
-            Pág. {currentPage} ({currentPageCount})
+            {unitLabel === 'cap.' ? `Cap. ${currentPage}` : `Pág. ${currentPage}`} ({currentPageCount})
           </button>
         </div>
       </div>
@@ -227,12 +229,14 @@ export function ReaderHighlightsPanel({
             <div className="rounded-xl border border-dashed border-border bg-background/40 px-4 py-8 text-center">
               <p className="text-xs font-medium text-foreground">
                 {scope === 'page'
-                  ? `Sin subrayados en la página ${currentPage}`
+                  ? unitLabel === 'cap.'
+                    ? `Sin subrayados en el capítulo ${currentPage}`
+                    : `Sin subrayados en la página ${currentPage}`
                   : 'Sin subrayados en este documento'}
               </p>
               <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
-                Selecciona cualquier fragmento del texto en el PDF para
-                subrayarlo o pulsa &ldquo;Nuevo&rdquo; para anotar manualmente.
+                Selecciona cualquier fragmento del texto para subrayarlo o pulsa
+                &ldquo;Nuevo&rdquo; para anotar manualmente.
               </p>
             </div>
           ) : null}
@@ -297,7 +301,7 @@ export function ReaderHighlightsPanel({
                           : 'border-border bg-secondary/50 text-muted-foreground hover:text-foreground',
                       )}
                     >
-                      pág. {entry.page_number}
+                      {unitLabel} {entry.page_number}
                     </button>
                   ) : (
                     <span className="font-mono text-[10.5px] text-muted-foreground/70">

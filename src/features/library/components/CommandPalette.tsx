@@ -45,7 +45,7 @@ import {
   useSearchItemsFts,
   useSeedSampleLibrary,
 } from '@/features/library/hooks/useLibraryData';
-import { isPdfReadableLocally } from '@/lib/highlights';
+import { isItemReadableLocally } from '@/lib/highlights';
 import { getShelfBreadcrumb } from '@/lib/shelfTree';
 import { ITEM_TYPE_SINGULAR, normalizeForSearch } from '@/lib/text';
 import { useUiStore } from '@/store/uiStore';
@@ -487,10 +487,12 @@ export function CommandPalette({
                 <CommandSeparator />
                 <CommandGroup heading="Subrayados (FTS5)">
                   {highlightsFtsResults.slice(0, 8).map((entry) => {
-                    const canReadLocally = isPdfReadableLocally(
+                    const canReadLocally = isItemReadableLocally(
                       entry.item_file_path,
                       entry.item_file_format,
                     );
+                    const unitLabel =
+                      entry.item_file_format === 'epub' ? 'cap.' : 'pág.';
                     return (
                       <CommandItem
                         key={entry.id}
@@ -523,7 +525,7 @@ export function CommandPalette({
                             variant="outline"
                             className="shrink-0 rounded-md font-mono text-[10px] font-normal tabular-nums text-muted-foreground"
                           >
-                            pág. {entry.page_number}
+                            {unitLabel} {entry.page_number}
                           </Badge>
                         ) : null}
                       </CommandItem>

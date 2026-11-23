@@ -11,7 +11,7 @@ import {
   type BookItemActions,
 } from '@/features/library/components/BookItemMenu';
 import { useAssetUrl } from '@/features/library/hooks/useAssetUrl';
-import { isPdfReadableLocally } from '@/lib/highlights';
+import { isItemReadableLocally } from '@/lib/highlights';
 import { cn } from '@/lib/utils';
 import type { LibraryItemWithRelations } from '@/types/domain';
 
@@ -33,7 +33,7 @@ export const BookCard = memo(function BookCard({
   selectionActive = false,
 }: BookCardProps) {
   const assetUrl = useAssetUrl(item.cover_path, item.updated_at);
-  const canReadLocally = isPdfReadableLocally(item.file_path, item.file_format);
+  const canReadLocally = isItemReadableLocally(item.file_path, item.file_format);
   const isFavorite = item.is_favorite === 1;
   const readingPercent =
     item.page_count > 0 && item.current_page > 0
@@ -58,7 +58,7 @@ export const BookCard = memo(function BookCard({
   const hoverHint = selectionActive
     ? 'Clic para seleccionar · Shift+Clic para rango'
     : canReadLocally
-      ? 'Clic para ver ficha · Doble clic para leer PDF'
+      ? `Clic para ver ficha · Doble clic para leer ${item.file_format.toUpperCase()}`
       : undefined;
 
   return (
