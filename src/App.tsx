@@ -73,6 +73,11 @@ const LazyPdfReaderView = lazy(() =>
     default: m.PdfReaderView,
   })),
 );
+const LazyStatsView = lazy(() =>
+  import('@/features/stats/components/StatsView').then((m) => ({
+    default: m.StatsView,
+  })),
+);
 
 function preloadCommandPalette(): void {
   void loadCommandPalette();
@@ -303,6 +308,8 @@ export function App() {
   }
 
   const isHighlightsView = activeSection === 'highlights';
+  const isStatsView = activeSection === 'stats';
+  const isSecondaryView = isHighlightsView || isStatsView;
   const showEmptyLibraryActions =
     navCounts.all === 0 && activeTypeFilter === 'all';
 
@@ -339,13 +346,13 @@ export function App() {
           <SidebarInset className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden bg-background">
             <LibraryHeader
               segments={heading.segments}
-              showViewControls={!isHighlightsView}
+              showViewControls={!isSecondaryView}
               isImporting={isImporting}
               onImportFiles={importFromDialog}
               onPreloadCommandPalette={preloadCommandPalette}
             />
 
-            {!isHighlightsView ? (
+            {!isSecondaryView ? (
               <TypeFilterBar
                 activeType={activeTypeFilter}
                 counts={typeCounts}
@@ -359,6 +366,16 @@ export function App() {
                   <LazyHighlightsView
                     onOpenItem={setSelectedItemId}
                     onOpenInReader={openReader}
+                  />
+                </Suspense>
+              ) : isStatsView ? (
+                <Suspense fallback={LIBRARY_LOADING_SKELETON}>
+                  <LazyStatsView
+                    onOpenItem={setSelectedItemId}
+                    onOpenReader={openReader}
+                    onSelectShelf={handleSelectShelf}
+                    onNavigateSection={navigate}
+                    onImportFiles={() => void importFromDialog()}
                   />
                 </Suspense>
               ) : itemsQuery.isLoading ? (

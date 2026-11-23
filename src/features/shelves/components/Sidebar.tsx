@@ -1,4 +1,5 @@
 import {
+  BarChart3,
   BookOpen,
   ChevronDown,
   ChevronRight,
@@ -78,11 +79,12 @@ const INBOX_ICON = <Inbox className="size-4" />;
 const LIBRARY_ICON = <Library className="size-4" />;
 const RECENT_ICON = <Clock className="size-4" />;
 const HIGHLIGHTS_ICON = <Highlighter className="size-4" />;
+const STATS_ICON = <BarChart3 className="size-4" />;
 
 interface PrimaryNavItemProps {
   icon: ReactNode;
   label: string;
-  count: number;
+  count?: number;
   active: boolean;
   onSelect: () => void;
 }
@@ -113,9 +115,11 @@ const PrimaryNavItem = memo(function PrimaryNavItem({
         </span>
         <span>{label}</span>
       </SidebarMenuButton>
-      <SidebarMenuBadge className="font-mono text-[11px] font-normal text-muted-foreground">
-        {count}
-      </SidebarMenuBadge>
+      {count !== undefined ? (
+        <SidebarMenuBadge className="font-mono text-[11px] font-normal text-muted-foreground">
+          {count}
+        </SidebarMenuBadge>
+      ) : null}
     </SidebarMenuItem>
   );
 });
@@ -276,6 +280,7 @@ export const Sidebar = memo(function Sidebar({
     () => navigate('highlights'),
     [navigate],
   );
+  const handleSelectStats = useCallback(() => navigate('stats'), [navigate]);
   const handleSelectShelf = useCallback(
     (shelfId: string) => navigate({ kind: 'shelf', shelfId }),
     [navigate],
@@ -358,6 +363,12 @@ export const Sidebar = memo(function Sidebar({
                     count={navCounts.highlights}
                     active={activeSection === 'highlights'}
                     onSelect={handleSelectHighlights}
+                  />
+                  <PrimaryNavItem
+                    icon={STATS_ICON}
+                    label="Estadísticas"
+                    active={activeSection === 'stats'}
+                    onSelect={handleSelectStats}
                   />
                 </SidebarMenu>
               </SidebarGroup>

@@ -66,6 +66,7 @@ export const libraryKeys = {
   searchHighlightsFtsRoot: ['library', 'search-highlights-fts'] as const,
   searchHighlightsFts: (query: string) =>
     ['library', 'search-highlights-fts', query] as const,
+  stats: ['library', 'stats'] as const,
   hasSample: ['library', 'has-sample'] as const,
 };
 
@@ -243,6 +244,7 @@ export function useUpdateItem() {
         }),
         queryClient.invalidateQueries({ queryKey: libraryKeys.searchFtsRoot }),
         queryClient.invalidateQueries({ queryKey: libraryKeys.highlights }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.stats }),
       ]);
     },
   });
@@ -320,6 +322,7 @@ export function useSaveReadingProgress() {
         queryClient.invalidateQueries({
           queryKey: libraryKeys.itemDetail(variables.itemId),
         }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.stats }),
       ]);
     },
   });
@@ -339,6 +342,7 @@ export function useCreateHighlight() {
           queryKey: libraryKeys.searchHighlightsFtsRoot,
         }),
         queryClient.invalidateQueries({ queryKey: libraryKeys.navCounts }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.stats }),
       ]);
     },
   });
@@ -381,6 +385,7 @@ export function useDeleteHighlight() {
           queryKey: libraryKeys.searchHighlightsFtsRoot,
         }),
         queryClient.invalidateQueries({ queryKey: libraryKeys.navCounts }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.stats }),
       ]);
     },
   });

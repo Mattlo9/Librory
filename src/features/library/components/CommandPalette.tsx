@@ -1,4 +1,5 @@
 import {
+  BarChart3,
   BookOpen,
   Clock,
   FolderPlus,
@@ -70,6 +71,7 @@ const ACTION_ICONS = {
   all: <Library className="size-4" />,
   recent: <Clock className="size-4" />,
   highlights: <Highlighter className="size-4" />,
+  stats: <BarChart3 className="size-4" />,
   newShelf: <FolderPlus className="size-4" />,
   newTag: <Tag className="size-4" />,
   toggleView: <LayoutGrid className="size-4" />,
@@ -173,6 +175,14 @@ export function CommandPalette({
         shortcut: 'Alt+4',
         icon: ACTION_ICONS.highlights,
         run: () => navigate('highlights'),
+      },
+      {
+        id: 'nav-stats',
+        label: 'Ir a Estadísticas',
+        keywords: 'estadisticas stats progreso paginas terminados dashboard',
+        shortcut: 'Alt+5',
+        icon: ACTION_ICONS.stats,
+        run: () => navigate('stats'),
       },
       ...(onImportFiles
         ? [
