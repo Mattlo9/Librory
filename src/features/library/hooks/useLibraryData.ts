@@ -81,6 +81,7 @@ export const libraryKeys = {
   searchHighlightsFtsRoot: ['library', 'search-highlights-fts'] as const,
   searchHighlightsFts: (query: string) =>
     ['library', 'search-highlights-fts', query] as const,
+  stats: ['library', 'stats'] as const,
   hasSample: ['library', 'has-sample'] as const,
 };
 
@@ -160,7 +161,7 @@ export function useTypeCounts(
       baseFilter.shelfIds ?? [],
     ],
     queryFn: () => getItemCountsByType(baseFilter),
-    enabled: tauriActive && section !== 'highlights',
+    enabled: tauriActive && section !== 'highlights' && section !== 'stats',
   });
 }
 
@@ -183,7 +184,11 @@ export function useStatusCounts(
       baseFilter.shelfIds ?? [],
     ],
     queryFn: () => getItemCountsByStatus(baseFilter),
-    enabled: tauriActive && section !== 'highlights' && section !== 'inbox',
+    enabled:
+      tauriActive &&
+      section !== 'highlights' &&
+      section !== 'stats' &&
+      section !== 'inbox',
   });
 }
 
@@ -207,7 +212,7 @@ export function useLibraryItems(
       filter.shelfIds ?? [],
     ],
     queryFn: () => listItemsWithRelations(filter),
-    enabled: tauriActive && section !== 'highlights',
+    enabled: tauriActive && section !== 'highlights' && section !== 'stats',
   });
 }
 
@@ -290,11 +295,13 @@ export function useUpdateItem() {
         queryClient.invalidateQueries({ queryKey: libraryKeys.typeCountsRoot }),
         queryClient.invalidateQueries({ queryKey: libraryKeys.statusCountsRoot }),
         queryClient.invalidateQueries({ queryKey: libraryKeys.navCounts }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.stats }),
         queryClient.invalidateQueries({
           queryKey: libraryKeys.itemDetail(variables.id),
         }),
         queryClient.invalidateQueries({ queryKey: libraryKeys.searchFtsRoot }),
         queryClient.invalidateQueries({ queryKey: libraryKeys.highlights }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.stats }),
       ]);
     },
   });
@@ -364,6 +371,7 @@ export function useToggleItemFavorite() {
         queryClient.invalidateQueries({ queryKey: libraryKeys.typeCountsRoot }),
         queryClient.invalidateQueries({ queryKey: libraryKeys.statusCountsRoot }),
         queryClient.invalidateQueries({ queryKey: libraryKeys.navCounts }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.stats }),
         queryClient.invalidateQueries({
           queryKey: libraryKeys.itemDetail(variables.id),
         }),
@@ -435,6 +443,7 @@ export function useSaveReadingProgress() {
         queryClient.invalidateQueries({
           queryKey: libraryKeys.itemDetail(variables.itemId),
         }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.stats }),
       ]);
     },
   });
@@ -454,6 +463,7 @@ export function useCreateHighlight() {
           queryKey: libraryKeys.searchHighlightsFtsRoot,
         }),
         queryClient.invalidateQueries({ queryKey: libraryKeys.navCounts }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.stats }),
       ]);
     },
   });
@@ -496,6 +506,7 @@ export function useDeleteHighlight() {
           queryKey: libraryKeys.searchHighlightsFtsRoot,
         }),
         queryClient.invalidateQueries({ queryKey: libraryKeys.navCounts }),
+        queryClient.invalidateQueries({ queryKey: libraryKeys.stats }),
       ]);
     },
   });

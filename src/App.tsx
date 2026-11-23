@@ -77,6 +77,11 @@ const LazyBookReaderView = lazy(() =>
     default: m.BookReaderView,
   })),
 );
+const LazyStatsView = lazy(() =>
+  import('@/features/stats/components/StatsView').then((m) => ({
+    default: m.StatsView,
+  })),
+);
 
 function preloadCommandPalette(): void {
   void loadCommandPalette();
@@ -373,6 +378,8 @@ export function App() {
   }
 
   const isHighlightsView = activeSection === 'highlights';
+  const isStatsView = activeSection === 'stats';
+  const isSecondaryView = isHighlightsView || isStatsView;
   const hasActiveFilters =
     activeTypeFilter !== 'all' ||
     (activeSection !== 'inbox' && activeStatusFilter !== 'all');
@@ -411,13 +418,13 @@ export function App() {
           <SidebarInset className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden bg-background">
             <LibraryHeader
               segments={heading.segments}
-              showViewControls={!isHighlightsView}
+              showViewControls={!isSecondaryView}
               isImporting={isImporting}
               onImportFiles={importFromDialog}
               onPreloadCommandPalette={preloadCommandPalette}
             />
 
-            {!isHighlightsView ? (
+            {!isSecondaryView ? (
               <TypeFilterBar
                 activeType={activeTypeFilter}
                 counts={typeCounts}
@@ -435,6 +442,16 @@ export function App() {
                   <LazyHighlightsView
                     onOpenItem={setSelectedItemId}
                     onOpenInReader={openReader}
+                  />
+                </Suspense>
+              ) : isStatsView ? (
+                <Suspense fallback={LIBRARY_LOADING_SKELETON}>
+                  <LazyStatsView
+                    onOpenItem={setSelectedItemId}
+                    onOpenReader={openReader}
+                    onSelectShelf={handleSelectShelf}
+                    onNavigateSection={navigate}
+                    onImportFiles={() => void importFromDialog()}
                   />
                 </Suspense>
               ) : itemsQuery.isLoading ? (
@@ -557,7 +574,7 @@ export function App() {
             onGoToInbox={() => navigate('inbox')}
             onDismiss={dismissSummary}
           />
-          {!isHighlightsView ? (
+          {!isSecondaryView ? (
             <BulkActionBar
               selectedItems={selectedItems}
               totalVisibleCount={items.length}

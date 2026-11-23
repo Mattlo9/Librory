@@ -36,6 +36,9 @@ export function getSectionHeading(
   if (section === 'highlights') {
     return { title: 'Highlights', segments: ['Highlights'] };
   }
+  if (section === 'stats') {
+    return { title: 'Estadísticas', segments: ['Estadísticas'] };
+  }
 
   if (section.kind === 'shelf') {
     const shelfById = new Map(shelves.map((shelf) => [shelf.id, shelf]));

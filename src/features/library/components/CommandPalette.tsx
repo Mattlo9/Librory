@@ -1,4 +1,5 @@
 import {
+  BarChart3,
   BookOpen,
   CheckSquare,
   Clock,
@@ -75,6 +76,7 @@ const ACTION_ICONS = {
   favorites: <Star className="size-4" />,
   recent: <Clock className="size-4" />,
   highlights: <Highlighter className="size-4" />,
+  stats: <BarChart3 className="size-4" />,
   newShelf: <FolderPlus className="size-4" />,
   newTag: <Tag className="size-4" />,
   toggleView: <LayoutGrid className="size-4" />,
@@ -195,6 +197,14 @@ export function CommandPalette({
         icon: ACTION_ICONS.highlights,
         run: () => navigate('highlights'),
       },
+      {
+        id: 'nav-stats',
+        label: 'Ir a Estadísticas',
+        keywords: 'estadisticas stats progreso paginas terminados dashboard',
+        shortcut: 'Alt+6',
+        icon: ACTION_ICONS.stats,
+        run: () => navigate('stats'),
+      },
       ...(onImportFiles
         ? [
             {
@@ -267,7 +277,11 @@ export function CommandPalette({
         keywords: 'filtrar estado leyendo reading progreso',
         icon: ACTION_ICONS.statusFilter,
         run: () => {
-          if (activeSection === 'highlights' || activeSection === 'inbox') {
+          if (
+            activeSection === 'highlights' ||
+            activeSection === 'inbox' ||
+            activeSection === 'stats'
+          ) {
             navigate('all');
           }
           setActiveStatusFilter('reading');
@@ -279,7 +293,11 @@ export function CommandPalette({
         keywords: 'filtrar estado por leer to read pendiente',
         icon: ACTION_ICONS.statusFilter,
         run: () => {
-          if (activeSection === 'highlights' || activeSection === 'inbox') {
+          if (
+            activeSection === 'highlights' ||
+            activeSection === 'inbox' ||
+            activeSection === 'stats'
+          ) {
             navigate('all');
           }
           setActiveStatusFilter('to_read');
@@ -291,7 +309,11 @@ export function CommandPalette({
         keywords: 'filtrar estado terminado finished completado',
         icon: ACTION_ICONS.statusFilter,
         run: () => {
-          if (activeSection === 'highlights' || activeSection === 'inbox') {
+          if (
+            activeSection === 'highlights' ||
+            activeSection === 'inbox' ||
+            activeSection === 'stats'
+          ) {
             navigate('all');
           }
           setActiveStatusFilter('finished');
@@ -303,7 +325,11 @@ export function CommandPalette({
         keywords: 'filtrar estado referencia reference consulta',
         icon: ACTION_ICONS.statusFilter,
         run: () => {
-          if (activeSection === 'highlights' || activeSection === 'inbox') {
+          if (
+            activeSection === 'highlights' ||
+            activeSection === 'inbox' ||
+            activeSection === 'stats'
+          ) {
             navigate('all');
           }
           setActiveStatusFilter('reference');

@@ -39,6 +39,7 @@ export type NavigationSection =
   | 'favorites'
   | 'recent'
   | 'highlights'
+  | 'stats'
   | { kind: 'shelf'; shelfId: string }
   | { kind: 'tag'; tagId: string };
 
@@ -262,4 +263,39 @@ export interface ExtractedDocumentMeta {
   author: string | null;
   pageCount: number;
   coverWebpBytes: Uint8Array | null;
+}
+
+export interface ReadingStatsSnapshot {
+  totals: {
+    totalItems: number;
+    finishedCount: number;
+    readingCount: number;
+    toReadCount: number;
+    inboxCount: number;
+    referenceCount: number;
+    totalPagesRead: number;
+    totalLibraryPages: number;
+    completionRate: number;
+    averageActiveProgress: number;
+    totalHighlights: number;
+    pdfCount: number;
+    epubCount: number;
+  };
+  byStatus: Array<{ status: ItemStatus; count: number }>;
+  byType: Array<{ type: ItemType; count: number }>;
+  inProgressItems: LibraryItem[];
+  recentlyFinished: LibraryItem[];
+  topShelves: Array<{
+    id: string;
+    name: string;
+    totalCount: number;
+    finishedCount: number;
+  }>;
+  monthlyActivity: Array<{
+    monthKey: string;
+    label: string;
+    addedCount: number;
+    finishedCount: number;
+    highlightsCount: number;
+  }>;
 }
