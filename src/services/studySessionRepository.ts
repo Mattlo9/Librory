@@ -1,4 +1,4 @@
-import { getDb } from '@/services/db';
+import { invokeDb } from '@/services/db';
 import type {
   CreateStudySessionInput,
   PomodoroBookOption,
@@ -13,6 +13,8 @@ interface StudySessionWithItemRow extends StudySession {
   item_author: string | null;
 }
 
+const ISO_DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 /**
  * Formats a Date in the user's local calendar as YYYY-MM-DD (never UTC).
  */
@@ -25,13 +27,27 @@ export function formatLocalDateKey(date: Date): string {
 
 /**
  * Parses a YYYY-MM-DD local date key at local noon to avoid DST shifts.
+ * Returns null for malformed date strings.
  */
-export function parseLocalDateKey(key: string): Date {
+export function parseLocalDateKey(key: string): Date | null {
+  if (!ISO_DATE_KEY_RE.test(key)) return null;
   const [yearStr, monthStr, dayStr] = key.split('-');
-  const year = Number.parseInt(yearStr ?? '1970', 10);
-  const month = Number.parseInt(monthStr ?? '1', 10);
-  const day = Number.parseInt(dayStr ?? '1', 10);
-  return new Date(year, month - 1, day, 12, 0, 0, 0);
+  const year = Number.parseInt(yearStr ?? '', 10);
+  const month = Number.parseInt(monthStr ?? '', 10);
+  const day = Number.parseInt(dayStr ?? '', 10);
+  if (
+    !Number.isFinite(year) ||
+    !Number.isFinite(month) ||
+    !Number.isFinite(day) ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31
+  ) {
+    return null;
+  }
+  const date = new Date(year, month - 1, day, 12, 0, 0, 0);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function addLocalDays(date: Date, deltaDays: number): Date {
@@ -52,7 +68,7 @@ function addLocalDays(date: Date, deltaDays: number): Date {
 export function computeHeatmapIntensity(
   focusSeconds: number,
 ): 0 | 1 | 2 | 3 | 4 {
-  if (focusSeconds <= 0) return 0;
+  if (!Number.isFinite(focusSeconds) || focusSeconds <= 0) return 0;
   if (focusSeconds < 1500) return 1; // < 25 min
   if (focusSeconds < 3000) return 2; // 25–49 min
   if (focusSeconds < 5400) return 3; // 50–89 min
@@ -60,57 +76,27 @@ export function computeHeatmapIntensity(
 }
 
 /**
- * Inserts a new Pomodoro study session into SQLite and returns the persisted row.
+ * Inserts a new Pomodoro study session into SQLite via Rust and returns the persisted row.
  */
 export async function createStudySession(
   input: CreateStudySessionInput,
 ): Promise<StudySession> {
-  const db = await getDb();
-  const id = crypto.randomUUID();
-
-  await db.execute(
-    `INSERT INTO study_sessions (
-      id, item_id, phase, planned_seconds, duration_seconds, completed,
-      started_at, ended_at, local_date, local_hour
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-    [
-      id,
-      input.item_id ?? null,
-      input.phase,
-      Math.max(1, Math.round(input.planned_seconds)),
-      Math.max(1, Math.round(input.duration_seconds)),
-      input.completed ? 1 : 0,
-      input.started_at,
-      input.ended_at,
-      input.local_date,
-      Math.min(23, Math.max(0, Math.floor(input.local_hour))),
-    ],
-  );
-
-  const rows = await db.select<StudySession[]>(
-    'SELECT * FROM study_sessions WHERE id = $1 LIMIT 1',
-    [id],
-  );
-  const created = rows[0];
-  if (!created) {
-    throw new Error(`No se pudo recuperar la sesión de estudio (${id}).`);
+  if (
+    !Number.isFinite(input.planned_seconds) ||
+    !Number.isFinite(input.duration_seconds) ||
+    !Number.isFinite(input.local_hour)
+  ) {
+    throw new Error('Los datos de duración de la sesión de estudio no son válidos.');
   }
-  return created;
+
+  return invokeDb<StudySession>('db_create_study_session', { input });
 }
 
 /**
  * Lists library items ordered with currently reading items first for the Pomodoro selector.
  */
 export async function listPomodoroBookOptions(): Promise<PomodoroBookOption[]> {
-  const db = await getDb();
-  return db.select<PomodoroBookOption[]>(
-    `SELECT id, title, author, status
-     FROM items
-     ORDER BY
-       CASE WHEN status = 'reading' THEN 0 ELSE 1 END,
-       COALESCE(last_opened_at, updated_at) DESC
-     LIMIT 100`,
-  );
+  return invokeDb<PomodoroBookOption[]>('db_list_pomodoro_book_options');
 }
 
 function computeStreaks(
@@ -118,7 +104,7 @@ function computeStreaks(
   today: Date,
 ): { currentStreakDays: number; longestStreakDays: number } {
   const activeDates = Array.from(dailyMap.entries())
-    .filter(([, bucket]) => bucket.sessions > 0)
+    .filter(([dateKey, bucket]) => bucket.sessions > 0 && parseLocalDateKey(dateKey) !== null)
     .map(([dateKey]) => dateKey)
     .sort();
 
@@ -134,9 +120,10 @@ function computeStreaks(
     if (previousKey === null) {
       running = 1;
     } else {
-      const expectedNext = formatLocalDateKey(
-        addLocalDays(parseLocalDateKey(previousKey), 1),
-      );
+      const prevDate = parseLocalDateKey(previousKey);
+      const expectedNext = prevDate
+        ? formatLocalDateKey(addLocalDays(prevDate, 1))
+        : null;
       running = expectedNext === dateKey ? running + 1 : 1;
     }
     if (running > longestStreakDays) {
@@ -156,7 +143,7 @@ function computeStreaks(
   }
 
   let currentStreakDays = 0;
-  while (cursorDate !== null) {
+  while (cursorDate !== null && currentStreakDays < 3660) {
     const key = formatLocalDateKey(cursorDate);
     if ((dailyMap.get(key)?.sessions ?? 0) > 0) {
       currentStreakDays += 1;
@@ -175,17 +162,7 @@ function computeStreaks(
 export async function getStudyOverviewStats(
   range: StudyStatsRange,
 ): Promise<StudyOverviewStats> {
-  const db = await getDb();
-  const rows = await db.select<StudySessionWithItemRow[]>(
-    `SELECT
-       s.*,
-       i.title AS item_title,
-       i.author AS item_author
-     FROM study_sessions s
-     LEFT JOIN items i ON i.id = s.item_id
-     WHERE s.phase = 'focus'
-     ORDER BY s.started_at ASC`,
-  );
+  const rows = await invokeDb<StudySessionWithItemRow[]>('db_list_focus_sessions');
 
   const now = new Date();
   const today = new Date(
@@ -211,20 +188,25 @@ export async function getStudyOverviewStats(
     { sessions: number; focusSeconds: number }
   >();
 
-  for (const row of rows) {
+  const validRows = rows.filter((row) => parseLocalDateKey(row.local_date) !== null);
+
+  for (const row of validRows) {
     const prev = dailyMap.get(row.local_date) ?? {
       sessions: 0,
       focusSeconds: 0,
     };
+    const duration = Number.isFinite(Number(row.duration_seconds))
+      ? Math.max(0, Number(row.duration_seconds))
+      : 0;
     dailyMap.set(row.local_date, {
       sessions: prev.sessions + 1,
-      focusSeconds: prev.focusSeconds + Math.max(0, Number(row.duration_seconds) || 0),
+      focusSeconds: prev.focusSeconds + duration,
     });
   }
 
   const inRangeRows = rangeStartDate
-    ? rows.filter((row) => row.local_date >= rangeStartDate)
-    : rows;
+    ? validRows.filter((row) => row.local_date >= rangeStartDate)
+    : validRows;
 
   let totalSessions = 0;
   let completedSessions = 0;
@@ -243,7 +225,9 @@ export async function getStudyOverviewStats(
   >();
 
   for (const row of inRangeRows) {
-    const duration = Math.max(0, Number(row.duration_seconds) || 0);
+    const duration = Number.isFinite(Number(row.duration_seconds))
+      ? Math.max(0, Number(row.duration_seconds))
+      : 0;
     totalSessions += 1;
     if (row.completed === 1) {
       completedSessions += 1;
@@ -251,7 +235,8 @@ export async function getStudyOverviewStats(
     totalFocusSeconds += duration;
     activeDatesInRange.add(row.local_date);
 
-    const hour = Math.min(23, Math.max(0, Number(row.local_hour) || 0));
+    const rawHour = Number(row.local_hour);
+    const hour = Number.isFinite(rawHour) ? Math.min(23, Math.max(0, Math.floor(rawHour))) : 0;
     const hourBucket = hourMap.get(hour) ?? { seconds: 0, sessions: 0 };
     hourMap.set(hour, {
       seconds: hourBucket.seconds + duration,

@@ -1,4 +1,3 @@
-import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   ArrowLeft,
   BookOpen,
@@ -54,8 +53,10 @@ import {
   HIGHLIGHT_COLOR_LABELS,
   HIGHLIGHT_DOT_CLASS,
 } from '@/lib/highlights';
+import { isSafeHttpUrl, isSafeStoredBookPath } from '@/lib/validation';
 import { cn } from '@/lib/utils';
 import { parseEpubBook, type ParsedEpubBook } from '@/services/epubReaderService';
+import { openExternalUrl } from '@/services/fileService';
 import { useUiStore } from '@/store/uiStore';
 import {
   HIGHLIGHT_COLORS,
@@ -115,10 +116,11 @@ function loadPrefs(): EpubReaderPrefs {
     const raw = window.localStorage.getItem(PREFS_STORAGE_KEY);
     if (!raw) return DEFAULT_PREFS;
     const parsed = JSON.parse(raw) as Partial<EpubReaderPrefs>;
+    if (!parsed || typeof parsed !== 'object') return DEFAULT_PREFS;
     return {
       fontSize:
-        typeof parsed.fontSize === 'number'
-          ? Math.min(24, Math.max(14, parsed.fontSize))
+        typeof parsed.fontSize === 'number' && Number.isFinite(parsed.fontSize)
+          ? Math.min(24, Math.max(14, Math.round(parsed.fontSize)))
           : DEFAULT_PREFS.fontSize,
       fontFamily:
         parsed.fontFamily === 'sans' || parsed.fontFamily === 'serif'
@@ -161,14 +163,19 @@ function loadScrollSnapshot(
       string,
       { chapterIndex?: number; ratio?: number }
     >;
+    if (!map || typeof map !== 'object' || !Object.hasOwn(map, itemId)) {
+      return null;
+    }
     const entry = map[itemId];
     if (
       entry &&
       typeof entry.chapterIndex === 'number' &&
-      typeof entry.ratio === 'number'
+      Number.isFinite(entry.chapterIndex) &&
+      typeof entry.ratio === 'number' &&
+      Number.isFinite(entry.ratio)
     ) {
       return {
-        chapterIndex: entry.chapterIndex,
+        chapterIndex: Math.max(0, Math.floor(entry.chapterIndex)),
         ratio: Math.min(1, Math.max(0, entry.ratio)),
       };
     }
@@ -221,7 +228,7 @@ export function EpubReaderView({
   const isReadableEpub = Boolean(
     item &&
       item.file_format === 'epub' &&
-      !item.file_path.startsWith('sample/'),
+      isSafeStoredBookPath(item.file_path),
   );
 
   const bytesState = useStoredFileBytes(
@@ -358,7 +365,7 @@ export function EpubReaderView({
           ? CSS.escape(anchorId)
           : anchorId.replace(/"/g, '\\"');
       const targetEl = proseRef.current?.querySelector(
-        `[id="${escaped}"], [name="${escaped}"]`,
+        `[data-epub-id="${escaped}"]`,
       );
       if (targetEl instanceof HTMLElement) {
         targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -611,22 +618,23 @@ export function EpubReaderView({
 
   function handleProseClick(event: React.MouseEvent<HTMLElement>) {
     const target = event.target;
-    if (!(target instanceof HTMLElement)) return;
+    if (!(target instanceof Element)) return;
     const anchor = target.closest('a');
     if (!anchor) return;
 
+    // Unconditionally prevent native WebView navigation for all links inside untrusted EPUB prose.
+    event.preventDefault();
+
     if (anchor.dataset.epubExternal === 'true') {
-      event.preventDefault();
       const href = anchor.getAttribute('href');
-      if (href && /^https?:/i.test(href)) {
-        void openUrl(href).catch(() => {});
+      if (href && isSafeHttpUrl(href)) {
+        void openExternalUrl(href).catch(() => {});
       }
       return;
     }
 
     const targetPath = anchor.dataset.epubPath;
     if (targetPath && book) {
-      event.preventDefault();
       const targetIndex = book.resolveChapterByPath(targetPath);
       if (targetIndex >= 0) {
         navigateToChapter(targetIndex, anchor.dataset.epubHash ?? null);
@@ -1110,11 +1118,11 @@ export function EpubReaderView({
                   onMouseUp={handleProseMouseUp}
                   onClick={handleProseClick}
                   className={cn(
-                    'epub-prose selection:bg-accent-brand/25',
+                    'epub-prose [contain:layout_style_paint] selection:bg-accent-brand/25',
                     prefs.fontFamily === 'serif' ? 'font-serif' : 'font-sans',
                   )}
                   style={{ fontSize: `${prefs.fontSize}px` }}
-                  // HTML sanitizado en epubReaderService.ts (sin scripts, estilos globales ni handlers inline).
+                  // HTML reconstruido con lista blanca estricta en epubReaderService.ts.
                   dangerouslySetInnerHTML={{ __html: chapterContent.html }}
                 />
 

@@ -1,5 +1,6 @@
 import { memo, useState } from 'react';
 import { TypographicCover } from '@/components/ui/typographic-cover';
+import { isSafeAssetUrl } from '@/lib/validation';
 import { cn } from '@/lib/utils';
 import type { FileFormat, ItemType } from '@/types/domain';
 
@@ -38,7 +39,8 @@ export const CoverImage = memo(function CoverImage({
   className,
 }: CoverImageProps) {
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
-  const showImage = Boolean(assetUrl && failedUrl !== assetUrl);
+  const safeAssetUrl = isSafeAssetUrl(assetUrl) ? assetUrl : null;
+  const showImage = Boolean(safeAssetUrl && failedUrl !== safeAssetUrl);
 
   return (
     <div
@@ -48,13 +50,13 @@ export const CoverImage = memo(function CoverImage({
         className,
       )}
     >
-      {showImage && assetUrl ? (
+      {showImage && safeAssetUrl ? (
         <img
-          src={assetUrl}
+          src={safeAssetUrl}
           alt={title}
           loading="lazy"
           decoding="async"
-          onError={() => setFailedUrl(assetUrl)}
+          onError={() => setFailedUrl(safeAssetUrl)}
           className="h-full w-full object-cover"
         />
       ) : (

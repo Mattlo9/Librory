@@ -1,13 +1,22 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { canvasToWebpBytes, COVER_TARGET_WIDTH } from '@/lib/imageEncoding';
+import { cleanMetadataString } from '@/lib/validation';
 import type { ExtractedDocumentMeta } from '@/types/domain';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
-function cleanPdfMetaString(raw: unknown, rejectFilenames = false): string | null {
+const MAX_PDF_IMAGE_PIXELS = 16_777_216; // 16 megapixels per embedded PDF image
+const MAX_COVER_HEIGHT = 960;
+const PDF_COVER_RENDER_TIMEOUT_MS = 10_000;
+
+function cleanPdfMetaString(
+  raw: unknown,
+  maxLength: number,
+  rejectFilenames = false,
+): string | null {
   if (typeof raw !== 'string') return null;
-  const trimmed = raw.replace(/\s+/g, ' ').trim();
+  const trimmed = cleanMetadataString(raw, maxLength);
   if (!trimmed) return null;
 
   const lower = trimmed.toLowerCase();
@@ -29,7 +38,7 @@ function cleanPdfMetaString(raw: unknown, rejectFilenames = false): string | nul
 
 function readInfoField(info: unknown, key: string): unknown {
   if (typeof info !== 'object' || info === null) return undefined;
-  return (info as Record<string, unknown>)[key];
+  return Object.hasOwn(info, key) ? (info as Record<string, unknown>)[key] : undefined;
 }
 
 function hasMeaningfulVisualContent(canvas: HTMLCanvasElement): boolean {
@@ -70,13 +79,17 @@ function hasMeaningfulVisualContent(canvas: HTMLCanvasElement): boolean {
 }
 
 /**
- * Extracts PDF metadata, page count, and page-1 WebP thumbnail via pdfjs-dist.
+ * Extracts PDF metadata, page count, and bounded page-1 WebP thumbnail via pdfjs-dist
+ * with hardened parser options (no XFA, no embedded font faces, bounded pixels & timeout).
  */
 export async function extractPdfMetadataAndCover(
   pdfBytes: Uint8Array,
 ): Promise<ExtractedDocumentMeta> {
   const loadingTask = pdfjsLib.getDocument({
     data: pdfBytes.slice(),
+    maxImageSize: MAX_PDF_IMAGE_PIXELS,
+    disableFontFace: true,
+    enableXfa: false,
   });
   const canvas = document.createElement('canvas');
   let pdf: pdfjsLib.PDFDocumentProxy | null = null;
@@ -91,29 +104,54 @@ export async function extractPdfMetadataAndCover(
     page = firstPage;
 
     const title = metaResult
-      ? cleanPdfMetaString(readInfoField(metaResult.info, 'Title'), true)
+      ? cleanPdfMetaString(readInfoField(metaResult.info, 'Title'), 512, true)
       : null;
     const author = metaResult
-      ? cleanPdfMetaString(readInfoField(metaResult.info, 'Author'), false)
+      ? cleanPdfMetaString(readInfoField(metaResult.info, 'Author'), 256, false)
       : null;
 
     let coverWebpBytes: Uint8Array | null = null;
 
     if (page) {
       const baseViewport = page.getViewport({ scale: 1 });
-      if (baseViewport.width > 0 && baseViewport.height > 0) {
+      if (
+        Number.isFinite(baseViewport.width) &&
+        Number.isFinite(baseViewport.height) &&
+        baseViewport.width > 0 &&
+        baseViewport.height > 0
+      ) {
+        // Strictly cap both width and height (no lower scale floor that allows huge MediaBox OOMs).
         const scale = Math.min(
           2,
-          Math.max(0.5, COVER_TARGET_WIDTH / baseViewport.width),
+          COVER_TARGET_WIDTH / baseViewport.width,
+          MAX_COVER_HEIGHT / baseViewport.height,
         );
-        const viewport = page.getViewport({ scale });
-        canvas.width = Math.max(1, Math.round(viewport.width));
-        canvas.height = Math.max(1, Math.round(viewport.height));
+        if (scale > 0) {
+          const viewport = page.getViewport({ scale });
+          canvas.width = Math.max(1, Math.min(COVER_TARGET_WIDTH, Math.round(viewport.width)));
+          canvas.height = Math.max(1, Math.min(MAX_COVER_HEIGHT, Math.round(viewport.height)));
 
-        await page.render({ canvas, viewport }).promise;
+          const renderTask = page.render({ canvas, viewport });
+          let timeoutId: number | null = null;
+          try {
+            await Promise.race([
+              renderTask.promise,
+              new Promise<never>((_, reject) => {
+                timeoutId = window.setTimeout(() => {
+                  renderTask.cancel();
+                  reject(new Error('Tiempo agotado renderizando portada PDF.'));
+                }, PDF_COVER_RENDER_TIMEOUT_MS);
+              }),
+            ]);
+          } finally {
+            if (timeoutId !== null) {
+              window.clearTimeout(timeoutId);
+            }
+          }
 
-        if (hasMeaningfulVisualContent(canvas)) {
-          coverWebpBytes = await canvasToWebpBytes(canvas);
+          if (hasMeaningfulVisualContent(canvas)) {
+            coverWebpBytes = await canvasToWebpBytes(canvas);
+          }
         }
       }
     }

@@ -1,9 +1,9 @@
+import { cleanMetadataString, isSafeStoredBookPath } from '@/lib/validation';
 import {
   bulkDeleteItems,
   createItem,
   deleteItem,
   getItemById,
-  getItemsFilePathsByIds,
   listAllFileHashes,
   updateItem,
 } from '@/services/bookRepository';
@@ -23,6 +23,10 @@ import type {
   ItemType,
   LibraryItem,
 } from '@/types/domain';
+
+const MAX_METADATA_TITLE_LEN = 512;
+const MAX_METADATA_AUTHOR_LEN = 256;
+const MAX_METADATA_EXTRACT_BYTES = 128 * 1024 * 1024; // 128 MiB cap for in-WebView cover extraction
 
 function basenameFromPath(sourcePath: string): string {
   const normalized = sourcePath.replace(/\\/g, '/');
@@ -47,15 +51,15 @@ export function parseFilenameMetadata(filename: string): {
   const parts = cleaned.split(' - ');
 
   if (parts.length === 2) {
-    const candidateAuthor = parts[0]?.trim() ?? '';
-    const candidateTitle = parts[1]?.trim() ?? '';
+    const candidateAuthor = cleanMetadataString(parts[0], MAX_METADATA_AUTHOR_LEN) ?? '';
+    const candidateTitle = cleanMetadataString(parts[1], MAX_METADATA_TITLE_LEN) ?? '';
     if (candidateAuthor.length >= 2 && candidateTitle.length >= 2) {
       return { title: candidateTitle, author: candidateAuthor };
     }
   }
 
   return {
-    title: cleaned || 'Documento sin título',
+    title: cleanMetadataString(cleaned, MAX_METADATA_TITLE_LEN) ?? 'Documento sin título',
     author: '',
   };
 }
@@ -165,13 +169,19 @@ export async function importLocalFiles(
         coverWebpBytes: null,
       };
 
-      try {
-        extracted = await extractDocumentMetadata(
-          report.filePath,
-          report.fileFormat,
-        );
-      } catch {
-        // Si falla la lectura/renderizado de portada, continúa con fallback tipográfico.
+      if (report.fileSize <= MAX_METADATA_EXTRACT_BYTES) {
+        try {
+          extracted = await extractDocumentMetadata(
+            report.filePath,
+            report.fileFormat,
+          );
+        } catch (metaError) {
+          // Reject structural archive bombs cleanly; allow benign cover-thumbnail failures to fall back.
+          const msg = metaError instanceof Error ? metaError.message : '';
+          if (msg.includes('límite') || msg.includes('descompresión') || msg.includes('ZIP')) {
+            throw metaError;
+          }
+        }
       }
 
       if (extracted.coverWebpBytes) {
@@ -182,10 +192,17 @@ export async function importLocalFiles(
         }
       }
 
+      const resolvedTitle =
+        cleanMetadataString(extracted.title, MAX_METADATA_TITLE_LEN) ??
+        fallbackMeta.title;
+      const resolvedAuthor =
+        cleanMetadataString(extracted.author, MAX_METADATA_AUTHOR_LEN) ??
+        fallbackMeta.author;
+
       const item = await createItem({
         id: itemId,
-        title: extracted.title || fallbackMeta.title,
-        author: extracted.author || fallbackMeta.author,
+        title: resolvedTitle,
+        author: resolvedAuthor,
         type: inferInitialItemType(
           report.fileFormat,
           extracted.pageCount,
@@ -226,7 +243,7 @@ export async function importLocalFiles(
 export async function regenerateItemCover(
   item: LibraryItem,
 ): Promise<LibraryItem | null> {
-  if (item.file_path.startsWith('sample/')) {
+  if (!isSafeStoredBookPath(item.file_path)) {
     return item;
   }
 
@@ -274,11 +291,11 @@ export async function bulkDeleteItemsAndFiles(ids: string[]): Promise<void> {
   const uniqueIds = Array.from(new Set(ids));
   if (uniqueIds.length === 0) return;
 
-  const items = await getItemsFilePathsByIds(uniqueIds);
-  await bulkDeleteItems(uniqueIds);
+  // Atomic Rust transaction returns exact deleted rows so disk cleanup matches committed state.
+  const deletedItems = await bulkDeleteItems(uniqueIds);
 
   const fileRemovals: Array<Promise<void>> = [];
-  for (const item of items) {
+  for (const item of deletedItems) {
     fileRemovals.push(removeStoredFile(item.file_path));
     if (item.cover_path) {
       fileRemovals.push(removeStoredFile(item.cover_path));
@@ -288,8 +305,8 @@ export async function bulkDeleteItemsAndFiles(ids: string[]): Promise<void> {
 }
 
 export async function openBookExternally(item: LibraryItem): Promise<void> {
-  if (item.file_path.startsWith('sample/')) {
-    throw new Error('Este elemento pertenece a la colección de ejemplo y no tiene archivo local.');
+  if (!isSafeStoredBookPath(item.file_path)) {
+    throw new Error('Este elemento no tiene un archivo local válido para apertura externa.');
   }
 
   await openStoredBook(item.file_path);
@@ -299,8 +316,8 @@ export async function openBookExternally(item: LibraryItem): Promise<void> {
 }
 
 export async function revealBookInExplorer(item: LibraryItem): Promise<void> {
-  if (item.file_path.startsWith('sample/')) {
-    throw new Error('Este elemento pertenece a la colección de ejemplo y no tiene archivo local.');
+  if (!isSafeStoredBookPath(item.file_path)) {
+    throw new Error('Este elemento no tiene un archivo local válido.');
   }
 
   await revealStoredBook(item.file_path);

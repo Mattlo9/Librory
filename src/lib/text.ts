@@ -1,6 +1,8 @@
 import type { ItemStatus, ItemType, ShelfCategory, SortOption } from '@/types/domain';
 
 const DIACRITICS_REGEX = /[\u0300-\u036f]/g;
+const MAX_FTS_QUERY_CHARS = 256;
+const MAX_FTS_TOKENS = 12;
 
 export function normalizeForSearch(value: string): string {
   return value
@@ -11,11 +13,18 @@ export function normalizeForSearch(value: string): string {
 }
 
 export function sanitizeFtsQuery(rawQuery: string): string {
-  const tokens = rawQuery
-    .trim()
+  const bounded = rawQuery
+    .replace(/[\u0000-\u001F\u007F]/g, '')
+    .slice(0, MAX_FTS_QUERY_CHARS)
+    .trim();
+
+  if (!bounded) return '';
+
+  const tokens = bounded
     .split(/\s+/)
-    .map((token) => token.replace(/["*^():]/g, '').trim())
-    .filter((token) => token.length > 0);
+    .map((token) => token.replace(/["*^():']/g, '').trim())
+    .filter((token) => token.length > 0)
+    .slice(0, MAX_FTS_TOKENS);
 
   return tokens.map((token) => `"${token}"*`).join(' ');
 }

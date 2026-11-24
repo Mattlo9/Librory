@@ -1,9 +1,13 @@
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
-import { appDataDir, BaseDirectory, join } from '@tauri-apps/api/path';
+import { appDataDir, join } from '@tauri-apps/api/path';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
-import { open as openDialog } from '@tauri-apps/plugin-dialog';
-import { exists, mkdir, readFile, remove, writeFile } from '@tauri-apps/plugin-fs';
-import { openPath, revealItemInDir } from '@tauri-apps/plugin-opener';
+import {
+  isSafeAssetUrl,
+  isSafeHttpUrl,
+  isSafeItemId,
+  isSafeStoredBookPath,
+  isSafeStoredCoverPath,
+} from '@/lib/validation';
 import { isTauriRuntime } from '@/services/db';
 import type { FileFormat, StorageDiagnostics } from '@/types/domain';
 
@@ -33,85 +37,60 @@ function getCachedAppDataDir(): Promise<string> {
   return appDataDirPromise;
 }
 
-async function ensureAppDataSubdir(subdir: string): Promise<boolean> {
-  const present = await exists(subdir, { baseDir: BaseDirectory.AppData });
-  if (present) {
-    return true;
-  }
-  await mkdir(subdir, { baseDir: BaseDirectory.AppData, recursive: true });
-  return exists(subdir, { baseDir: BaseDirectory.AppData });
-}
-
 /**
- * Ensures /books and /covers subdirectories exist inside appDataDir and returns resolved paths.
+ * Ensures /books and /covers subdirectories exist inside appDataDir via Rust and returns diagnostics.
  */
 export async function ensureStorageDirectories(): Promise<StorageDiagnostics> {
   if (!isTauriRuntime()) {
     throw new Error('El sistema de archivos local solo está disponible dentro de Tauri.');
   }
 
-  const root = await getCachedAppDataDir();
-  const [booksReady, coversReady, booksPath, coversPath, dbExpectedPath] =
-    await Promise.all([
-      ensureAppDataSubdir(BOOKS_DIR),
-      ensureAppDataSubdir(COVERS_DIR),
-      join(root, BOOKS_DIR),
-      join(root, COVERS_DIR),
-      join(root, DB_FILENAME),
-    ]);
-
-  return {
-    appDataPath: root,
-    booksPath,
-    coversPath,
-    dbExpectedPath,
-    booksReady,
-    coversReady,
-  };
+  return invoke<StorageDiagnostics>('ensure_storage_directories');
 }
 
 /**
- * Resolves a stored relative path (e.g. "books/id.pdf") to an absolute OS path inside appDataDir.
+ * Resolves a strictly validated stored relative path (`books/<id>.(pdf|epub)` or `covers/<id>.webp`)
+ * to an absolute path inside appDataDir without permitting traversal segments.
  */
 export async function getAbsoluteStoragePath(relativePath: string): Promise<string> {
+  if (!isSafeStoredBookPath(relativePath) && !isSafeStoredCoverPath(relativePath)) {
+    throw new Error('Ruta de almacenamiento local inválida.');
+  }
   const root = await getCachedAppDataDir();
-  const segments = relativePath.split(/[\\/]+/).filter(Boolean);
-  return join(root, ...segments);
+  const [dir, filename] = relativePath.split('/');
+  if (!dir || !filename) {
+    throw new Error('Ruta de almacenamiento local malformada.');
+  }
+  return join(root, dir, filename);
 }
 
 /**
- * Converts a stored relative asset path (e.g. "covers/id.webp") into a WebView asset URL without Base64.
+ * Converts a strictly validated stored cover path (`covers/<id>.webp`) into a WebView asset URL.
  */
 export async function resolveAssetUrl(
   relativePath: string | null,
   cacheBust?: string,
 ): Promise<string | null> {
-  if (!relativePath) {
+  if (!relativePath || !isSafeStoredCoverPath(relativePath)) {
     return null;
   }
 
   const absolutePath = await getAbsoluteStoragePath(relativePath);
   const assetUrl = convertFileSrc(absolutePath);
+  if (!isSafeAssetUrl(assetUrl)) {
+    return null;
+  }
   return cacheBust ? `${assetUrl}?v=${encodeURIComponent(cacheBust)}` : assetUrl;
 }
 
+/**
+ * Opens a native OS file picker inside Rust and registers selected paths as import-approved.
+ */
 export async function pickImportableFiles(): Promise<string[]> {
-  const selection = await openDialog({
-    title: 'Importar libros y documentos',
-    multiple: true,
-    filters: [
-      {
-        name: 'Documentos (PDF, EPUB)',
-        extensions: ['pdf', 'epub'],
-      },
-    ],
-  });
-
-  if (!selection) {
+  if (!isTauriRuntime()) {
     return [];
   }
-
-  return Array.isArray(selection) ? selection : [selection];
+  return invoke<string[]>('pick_importable_files');
 }
 
 export async function subscribeToFileDrops(handlers: {
@@ -138,6 +117,9 @@ export async function copyExternalBookToLibrary(
   itemId: string,
   knownHashes: string[],
 ): Promise<RustImportReport> {
+  if (!isSafeItemId(itemId)) {
+    throw new Error('Identificador de recurso inválido.');
+  }
   return invoke<RustImportReport>('import_book_file', {
     sourcePath,
     itemId,
@@ -146,41 +128,63 @@ export async function copyExternalBookToLibrary(
 }
 
 export async function readStoredFileBytes(relativePath: string): Promise<Uint8Array> {
-  return readFile(relativePath, { baseDir: BaseDirectory.AppData });
+  if (!isSafeStoredBookPath(relativePath)) {
+    throw new Error('Ruta de libro local inválida.');
+  }
+  const buffer = await invoke<ArrayBuffer>('read_book_file', { relativePath });
+  return new Uint8Array(buffer);
 }
 
 export async function writeCoverWebp(
   itemId: string,
   bytes: Uint8Array,
 ): Promise<string> {
-  await ensureAppDataSubdir(COVERS_DIR);
-  const relativePath = `${COVERS_DIR}/${itemId}.webp`;
-  await writeFile(relativePath, bytes, { baseDir: BaseDirectory.AppData });
-  return relativePath;
+  if (!isSafeItemId(itemId)) {
+    throw new Error('Identificador de portada inválido.');
+  }
+  return invoke<string>('write_cover_webp', {
+    itemId,
+    bytes: Array.from(bytes),
+  });
 }
 
 export async function removeStoredFile(relativePath: string | null): Promise<void> {
   if (!relativePath) return;
-  if (
-    !relativePath.startsWith(`${BOOKS_DIR}/`) &&
-    !relativePath.startsWith(`${COVERS_DIR}/`)
-  ) {
+  if (!isSafeStoredBookPath(relativePath) && !isSafeStoredCoverPath(relativePath)) {
     return;
   }
 
   try {
-    await remove(relativePath, { baseDir: BaseDirectory.AppData });
+    await invoke<void>('remove_stored_file', { relativePath });
   } catch {
     // Ignorar si el archivo ya fue eliminado manualmente del disco.
   }
 }
 
 export async function openStoredBook(relativePath: string): Promise<void> {
-  const absolutePath = await getAbsoluteStoragePath(relativePath);
-  await openPath(absolutePath);
+  if (!isSafeStoredBookPath(relativePath)) {
+    throw new Error('La ruta del libro local no es válida para apertura externa.');
+  }
+  await invoke<void>('open_stored_book', { relativePath });
 }
 
 export async function revealStoredBook(relativePath: string): Promise<void> {
-  const absolutePath = await getAbsoluteStoragePath(relativePath);
-  await revealItemInDir(absolutePath);
+  if (!isSafeStoredBookPath(relativePath)) {
+    throw new Error('La ruta del libro local no es válida.');
+  }
+  await invoke<void>('reveal_stored_book', { relativePath });
+}
+
+/**
+ * Validates and opens an external `http://` or `https://` URL via Rust's opener command.
+ */
+export async function openExternalUrl(rawUrl: string): Promise<void> {
+  if (!isSafeHttpUrl(rawUrl)) {
+    return;
+  }
+  if (isTauriRuntime()) {
+    await invoke<void>('open_external_url', { url: rawUrl.trim() });
+    return;
+  }
+  window.open(rawUrl.trim(), '_blank', 'noopener,noreferrer');
 }

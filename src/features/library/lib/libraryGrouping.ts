@@ -135,6 +135,15 @@ export function groupItemsByShelf(
   }
   visit(null);
 
+  // Include any shelves belonging to corrupted/cyclic parent chains so their items never vanish.
+  for (const shelf of shelves) {
+    if (!visited.has(shelf.id)) {
+      visited.add(shelf.id);
+      orderedShelves.push(shelf);
+      visit(shelf.id);
+    }
+  }
+
   const groups: ShelfGroup[] = [];
   for (const shelf of orderedShelves) {
     const groupItems = itemsByShelfId.get(shelf.id);

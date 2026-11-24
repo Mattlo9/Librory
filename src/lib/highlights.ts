@@ -1,3 +1,4 @@
+import { isSafeStoredBookPath } from '@/lib/validation';
 import type { FileFormat, HighlightColor } from '@/types/domain';
 
 export const HIGHLIGHT_COLOR_LABELS: Record<HighlightColor, string> = {
@@ -42,7 +43,7 @@ export function isPdfReadableLocally(
   filePath: string,
   fileFormat: FileFormat,
 ): boolean {
-  return fileFormat === 'pdf' && !filePath.startsWith('sample/');
+  return fileFormat === 'pdf' && isSafeStoredBookPath(filePath);
 }
 
 export function isItemReadableLocally(
@@ -50,7 +51,7 @@ export function isItemReadableLocally(
   fileFormat: FileFormat,
 ): boolean {
   return (
-    !filePath.startsWith('sample/') &&
+    isSafeStoredBookPath(filePath) &&
     (fileFormat === 'pdf' || fileFormat === 'epub')
   );
 }

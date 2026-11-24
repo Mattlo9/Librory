@@ -55,5 +55,18 @@ export default defineConfig({
     watch: {
       ignored: ['**/src-tauri/**'],
     },
+    fs: {
+      strict: true,
+      deny: [
+        '.env',
+        '.env.*',
+        '*.{crt,pem}',
+        '*.key',
+        '*.db',
+        '*.sqlite*',
+        '**/.git/**',
+        '**/src-tauri/**',
+      ],
+    },
   },
 });

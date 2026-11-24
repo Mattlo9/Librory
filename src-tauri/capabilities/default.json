@@ -1,25 +1,9 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permisos mínimos para Librory sobre su directorio local de datos",
+  "description": "Permisos mínimos para Librory: almacenamiento, SQLite, diálogos y apertura externa mediados exclusivamente por comandos Rust validados",
   "windows": ["main"],
   "permissions": [
-    "core:default",
-    "sql:default",
-    "sql:allow-load",
-    "sql:allow-execute",
-    "sql:allow-select",
-    "sql:allow-close",
-    "fs:allow-appdata-read-recursive",
-    "fs:allow-appdata-write-recursive",
-    "dialog:default",
-    "opener:default",
-    "opener:allow-reveal-item-in-dir",
-    {
-      "identifier": "opener:allow-open-path",
-      "allow": [
-        { "path": "$APPDATA/books/**" }
-      ]
-    }
+    "core:default"
   ]
 }

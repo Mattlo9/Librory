@@ -3,10 +3,31 @@ node_modules/
 .pnp
 .pnp.js
 
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Local databases
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Signing keys & certificates
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+
 # Frontend build
 dist/
 dist-ssr/
 *.local
+*.tsbuildinfo
 
 # Tauri / Rust build artifacts
 src-tauri/target/

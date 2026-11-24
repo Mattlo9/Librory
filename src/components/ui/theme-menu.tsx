@@ -44,7 +44,11 @@ export function ThemeMenu({
   align = 'end',
   className,
 }: ThemeMenuProps) {
-  const theme = useUiStore((s) => s.theme);
+  const rawTheme = useUiStore((s) => s.theme);
+  const theme: ThemePreference =
+    rawTheme === 'light' || rawTheme === 'dark' || rawTheme === 'system'
+      ? rawTheme
+      : 'dark';
   const setTheme = useUiStore((s) => s.setTheme);
 
   const ActiveIcon =

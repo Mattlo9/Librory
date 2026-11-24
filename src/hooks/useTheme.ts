@@ -14,7 +14,8 @@ export function getSystemTheme(): ResolvedTheme {
 
 /** Resolves a ThemePreference ('light' | 'dark' | 'system') to a concrete 'light' | 'dark'. */
 export function resolveTheme(preference: ThemePreference): ResolvedTheme {
-  return preference === 'system' ? getSystemTheme() : preference;
+  if (preference === 'light' || preference === 'dark') return preference;
+  return preference === 'system' ? getSystemTheme() : 'dark';
 }
 
 /** Synchronizes the `.dark` class and `color-scheme` property on `<html>`. */

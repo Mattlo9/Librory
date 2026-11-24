@@ -2,7 +2,9 @@
  * Formats seconds as MM:SS (or H:MM:SS when >= 1 hour).
  */
 export function formatClock(totalSeconds: number): string {
-  const safe = Math.max(0, Math.floor(totalSeconds));
+  const safe = Number.isFinite(totalSeconds)
+    ? Math.max(0, Math.floor(totalSeconds))
+    : 0;
   const hours = Math.floor(safe / 3600);
   const minutes = Math.floor((safe % 3600) / 60);
   const seconds = safe % 60;
@@ -17,7 +19,9 @@ export function formatClock(totalSeconds: number): string {
  * Formats focused duration compactly for summary metrics (e.g. "12h 35m", "45 min", "< 1 min", "0 min").
  */
 export function formatDurationCompact(totalSeconds: number): string {
-  const safe = Math.max(0, Math.round(totalSeconds));
+  const safe = Number.isFinite(totalSeconds)
+    ? Math.max(0, Math.round(totalSeconds))
+    : 0;
   if (safe === 0) return '0 min';
   if (safe < 60) return '< 1 min';
 

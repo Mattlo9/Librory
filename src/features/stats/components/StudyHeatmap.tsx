@@ -35,15 +35,15 @@ const FULL_DATE_FORMATTER = new Intl.DateTimeFormat('es', {
 });
 
 function formatMonthLabel(dateKey: string): string {
-  const raw = SHORT_MONTH_FORMATTER.format(parseLocalDateKey(dateKey)).replace(
-    /\.$/,
-    '',
-  );
+  const parsed = parseLocalDateKey(dateKey);
+  if (!parsed) return '';
+  const raw = SHORT_MONTH_FORMATTER.format(parsed).replace(/\.$/, '');
   return raw.toLowerCase();
 }
 
 function formatDayDetail(day: StudyHeatmapDay): string {
-  const dateLabel = FULL_DATE_FORMATTER.format(parseLocalDateKey(day.date));
+  const parsed = parseLocalDateKey(day.date);
+  const dateLabel = parsed ? FULL_DATE_FORMATTER.format(parsed) : day.date;
   if (day.sessions === 0) {
     return `${dateLabel}: Sin sesiones`;
   }

@@ -185,6 +185,7 @@ export function HighlightsView({
             <Search className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               type="search"
+              maxLength={256}
               aria-label="Buscar subrayados y notas con FTS5"
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
