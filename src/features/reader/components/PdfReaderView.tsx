@@ -26,14 +26,16 @@ import {
   ReaderHighlightsPanel,
   type ReaderHighlightDraft,
 } from '@/features/reader/components/ReaderHighlightsPanel';
-import { useStoredPdfBytes } from '@/features/reader/hooks/useStoredPdfBytes';
+import { useStoredFileBytes } from '@/features/reader/hooks/useStoredFileBytes';
 import {
   HIGHLIGHT_COLOR_LABELS,
   HIGHLIGHT_DOT_CLASS,
   HIGHLIGHT_HEX,
   isPdfReadableLocally,
 } from '@/lib/highlights';
+import { isSafeHttpUrl, isSafeStoredBookPath } from '@/lib/validation';
 import { cn } from '@/lib/utils';
+import { openExternalUrl } from '@/services/fileService';
 import { useUiStore } from '@/store/uiStore';
 import {
   HIGHLIGHT_COLORS,
@@ -82,6 +84,17 @@ const EMBEDPDF_DARK_TOKENS = {
 const EMBEDPDF_FEATURES: NonNullable<ViewerConfig['features']> = {
   'documents.open': false,
   'documents.tabs': false,
+  attachments: false,
+  forms: false,
+  signatures: false,
+};
+
+const EMBEDPDF_PLUGINS: NonNullable<ViewerConfig['plugins']> = {
+  actions: {
+    javascript: { enabled: false },
+    openSequence: 'off',
+    triggers: { document: false, page: false, annotation: false },
+  },
 };
 
 function clampPage(page: number, numPages: number): number {
@@ -104,7 +117,7 @@ export function PdfReaderView({
   const isReadablePdf = Boolean(
     item && isPdfReadableLocally(item.file_path, item.file_format),
   );
-  const pdfBytesState = useStoredPdfBytes(
+  const pdfBytesState = useStoredFileBytes(
     isReadablePdf && item ? item.file_path : null,
   );
   const highlights = highlightsQuery.data ?? [];
@@ -201,6 +214,21 @@ export function PdfReaderView({
       setDocumentReady(true);
     };
 
+    const actionsCap = viewer.tryGet('actions');
+    const unsubUiAdapter = actionsCap?.setUiAdapter({
+      openUri(uri) {
+        if (isSafeHttpUrl(uri)) {
+          void openExternalUrl(uri).catch(() => {});
+        }
+      },
+      print() {
+        // Suppress PDF-action-triggered automatic print dialogs.
+      },
+      alert() {
+        // Suppress PDF AcroJS alert popups.
+      },
+    });
+
     const unsubOpen = viewer.documents.onOpened(() => {
       syncOpenedDocument();
     });
@@ -277,6 +305,7 @@ export function PdfReaderView({
 
     return () => {
       cancelled = true;
+      unsubUiAdapter?.();
       unsubOpen();
       unwatchStage();
       unwatchSelection();
@@ -538,7 +567,7 @@ export function PdfReaderView({
     const isRealEpub =
       item &&
       item.file_format === 'epub' &&
-      !item.file_path.startsWith('sample/');
+      isSafeStoredBookPath(item.file_path);
 
     return (
       <div className="flex h-screen w-screen flex-col bg-background">
@@ -746,6 +775,7 @@ export function PdfReaderView({
               locale="es"
               theme={embedPdfTheme}
               features={EMBEDPDF_FEATURES}
+              plugins={EMBEDPDF_PLUGINS}
               warnBeforeLeaving={false}
               onReady={handleViewerReady}
               className="block h-full w-full"

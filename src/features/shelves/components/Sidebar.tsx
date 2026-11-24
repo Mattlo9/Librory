@@ -139,6 +139,9 @@ interface ShelfTreeItemProps {
   onRequestDelete: (shelf: ShelfWithCount) => void;
 }
 
+const MAX_SHELF_RENDER_DEPTH = 32;
+const MAX_SHELF_INDENT_DEPTH = 8;
+
 const ShelfTreeItem = memo(function ShelfTreeItem({
   node,
   depth,
@@ -147,8 +150,8 @@ const ShelfTreeItem = memo(function ShelfTreeItem({
   onEdit,
   onRequestDelete,
 }: ShelfTreeItemProps) {
-  const hasChildren = node.children.length > 0;
-  const isExpanded = useUiStore((s) => s.expandedShelfIds[node.id] ?? true);
+  const hasChildren = node.children.length > 0 && depth < MAX_SHELF_RENDER_DEPTH;
+  const isExpanded = useUiStore((s) => s.expandedShelfIds?.[node.id] ?? true);
   const toggleShelfExpanded = useUiStore((s) => s.toggleShelfExpanded);
   const isActive = useUiStore((s) =>
     isSameNavigationSection(s.activeSection, {
@@ -156,6 +159,10 @@ const ShelfTreeItem = memo(function ShelfTreeItem({
       shelfId: node.id,
     }),
   );
+
+  if (depth > MAX_SHELF_RENDER_DEPTH) {
+    return null;
+  }
 
   return (
     <SidebarMenuItem className="group/shelf-row">
@@ -166,7 +173,7 @@ const ShelfTreeItem = memo(function ShelfTreeItem({
             ? 'bg-sidebar-accent text-sidebar-accent-foreground'
             : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground',
         )}
-        style={{ paddingLeft: `${6 + depth * 12}px` }}
+        style={{ paddingLeft: `${6 + Math.min(depth, MAX_SHELF_INDENT_DEPTH) * 12}px` }}
       >
         {hasChildren ? (
           <button

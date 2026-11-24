@@ -452,6 +452,7 @@ export function CommandPalette({
             <div className="w-full">
               <CommandInput
                 autoFocus
+                maxLength={256}
                 value={query}
                 onValueChange={setQuery}
                 placeholder="Buscar títulos, autores, subrayados (FTS5), estanterías o comandos..."

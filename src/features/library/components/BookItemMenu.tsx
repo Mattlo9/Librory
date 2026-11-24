@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { isItemReadableLocally } from '@/lib/highlights';
 import { ITEM_STATUS_LABELS } from '@/lib/text';
+import { isSafeStoredBookPath } from '@/lib/validation';
 import { cn } from '@/lib/utils';
 import {
   ITEM_STATUSES,
@@ -103,7 +104,7 @@ function BookMenuBody({
   ui: MenuPrimitives;
 }) {
   const canReadLocally = isItemReadableLocally(item.file_path, item.file_format);
-  const isSample = item.file_path.startsWith('sample/');
+  const hasLocalBookFile = isSafeStoredBookPath(item.file_path);
   const isFavorite = item.is_favorite === 1;
 
   return (
@@ -118,7 +119,7 @@ function BookMenuBody({
         </ui.Item>
       ) : null}
 
-      {!isSample ? (
+      {hasLocalBookFile ? (
         <ui.Item
           className="text-xs"
           onSelect={() => actions.onOpenExternally(item)}

@@ -183,7 +183,11 @@ export const useUiStore = create<UiState>()(
         }),
 
       setCoverSize: (coverSize) =>
-        set({ coverSize: Math.min(240, Math.max(110, coverSize)) }),
+        set((state) => ({
+          coverSize: Number.isFinite(coverSize)
+            ? Math.min(240, Math.max(110, Math.round(coverSize)))
+            : state.coverSize,
+        })),
 
       setViewMode: (viewMode) => set({ viewMode }),
 
@@ -317,6 +321,80 @@ export const useUiStore = create<UiState>()(
         expandedShelfIds: state.expandedShelfIds,
         tagsExpanded: state.tagsExpanded,
       }),
+      merge: (persistedState, currentState) => {
+        if (!persistedState || typeof persistedState !== 'object') {
+          return currentState;
+        }
+        const raw = persistedState as Record<string, unknown>;
+        const coverSize =
+          typeof raw.coverSize === 'number' && Number.isFinite(raw.coverSize)
+            ? Math.min(240, Math.max(110, Math.round(raw.coverSize)))
+            : currentState.coverSize;
+        const viewMode: ViewMode =
+          raw.viewMode === 'grid' || raw.viewMode === 'list'
+            ? raw.viewMode
+            : currentState.viewMode;
+        const sortBy: SortOption =
+          raw.sortBy === 'created_desc' ||
+          raw.sortBy === 'title_asc' ||
+          raw.sortBy === 'author_asc'
+            ? raw.sortBy
+            : currentState.sortBy;
+        const groupByShelf =
+          typeof raw.groupByShelf === 'boolean'
+            ? raw.groupByShelf
+            : currentState.groupByShelf;
+        const theme: ThemePreference =
+          raw.theme === 'light' || raw.theme === 'dark' || raw.theme === 'system'
+            ? raw.theme
+            : currentState.theme;
+        const sidebarOpen =
+          typeof raw.sidebarOpen === 'boolean'
+            ? raw.sidebarOpen
+            : currentState.sidebarOpen;
+        const tagsExpanded =
+          typeof raw.tagsExpanded === 'boolean'
+            ? raw.tagsExpanded
+            : currentState.tagsExpanded;
+
+        const safeExpanded: Record<string, boolean> = {};
+        if (
+          raw.expandedShelfIds &&
+          typeof raw.expandedShelfIds === 'object' &&
+          !Array.isArray(raw.expandedShelfIds)
+        ) {
+          let count = 0;
+          for (const [k, v] of Object.entries(
+            raw.expandedShelfIds as Record<string, unknown>,
+          )) {
+            if (count >= 2000) break;
+            if (
+              k === '__proto__' ||
+              k === 'constructor' ||
+              k === 'prototype' ||
+              k.length > 80
+            ) {
+              continue;
+            }
+            if (typeof v === 'boolean') {
+              safeExpanded[k] = v;
+              count += 1;
+            }
+          }
+        }
+
+        return {
+          ...currentState,
+          coverSize,
+          viewMode,
+          sortBy,
+          groupByShelf,
+          theme,
+          sidebarOpen,
+          expandedShelfIds: safeExpanded,
+          tagsExpanded,
+        };
+      },
     },
   ),
 );

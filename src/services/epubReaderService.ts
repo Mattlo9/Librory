@@ -1,4 +1,6 @@
-import { strFromU8, unzipSync } from 'fflate';
+import { strFromU8 } from 'fflate';
+import { normalizeZipLookupKey, safeUnzipEpub } from '@/lib/safeZip';
+import { cleanMetadataString, isSafeHttpUrl } from '@/lib/validation';
 
 export interface EpubChapterMeta {
   index: number;
@@ -34,34 +36,145 @@ interface ManifestEntry {
   properties: string;
 }
 
-const IMAGE_MIME_BY_EXT: Record<string, string> = {
+const MAX_SPINE_CHAPTERS = 2_000;
+const MAX_TOC_DEPTH = 16;
+const MAX_TOC_ENTRIES = 5_000;
+const MAX_SANITIZE_DEPTH = 64;
+const MAX_SANITIZE_NODES = 50_000;
+
+/**
+ * Strictly raster image MIME types only (SVG intentionally excluded to prevent script/SMIL/XLink risks).
+ */
+const RASTER_IMAGE_MIME_BY_EXT: Record<string, string> = {
   png: 'image/png',
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
   gif: 'image/gif',
   webp: 'image/webp',
-  svg: 'image/svg+xml',
   avif: 'image/avif',
   bmp: 'image/bmp',
 };
 
-const UNSAFE_TAGS = new Set([
+const SAFE_RASTER_DATA_URI_RE =
+  /^data:image\/(png|jpeg|jpg|gif|webp|avif|bmp);base64,[A-Za-z0-9+/=\s]+$/i;
+
+/**
+ * Strict allowlist of safe prose HTML elements (zero raw-text elements, zero foreign namespaces,
+ * zero interactive/executable/navigation/style tags).
+ */
+const ALLOWED_HTML_TAGS = new Set([
+  'p',
+  'div',
+  'span',
+  'br',
+  'hr',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'blockquote',
+  'pre',
+  'code',
+  'em',
+  'strong',
+  'i',
+  'b',
+  'u',
+  's',
+  'del',
+  'ins',
+  'sub',
+  'sup',
+  'small',
+  'mark',
+  'abbr',
+  'cite',
+  'q',
+  'dfn',
+  'kbd',
+  'samp',
+  'var',
+  'time',
+  'ruby',
+  'rt',
+  'rp',
+  'bdi',
+  'bdo',
+  'wbr',
+  'ul',
+  'ol',
+  'li',
+  'dl',
+  'dt',
+  'dd',
+  'table',
+  'thead',
+  'tbody',
+  'tfoot',
+  'tr',
+  'th',
+  'td',
+  'caption',
+  'colgroup',
+  'col',
+  'figure',
+  'figcaption',
+  'section',
+  'article',
+  'aside',
+  'header',
+  'footer',
+  'nav',
+  'main',
+  'address',
+  'img',
+  'a',
+]);
+
+/**
+ * Elements whose entire subtree must be discarded (never unwrapped as plain text).
+ */
+const DROP_SUBTREE_TAGS = new Set([
   'script',
+  'style',
+  'noscript',
+  'template',
   'iframe',
   'object',
   'embed',
   'applet',
   'form',
+  'input',
+  'button',
+  'select',
+  'textarea',
+  'fieldset',
+  'option',
+  'optgroup',
   'base',
   'meta',
   'link',
-  'style',
-  'noscript',
+  'head',
+  'title',
+  'audio',
+  'video',
+  'source',
+  'track',
+  'canvas',
+  'dialog',
+  'marquee',
+  'portal',
+  'frame',
+  'frameset',
+  'math',
+  'annotation-xml',
+  'xmp',
+  'noembed',
+  'noframes',
+  'plaintext',
 ]);
-
-function normalizeZipLookupKey(path: string): string {
-  return path.replace(/\\/g, '/').replace(/^\/+/, '').toLowerCase();
-}
 
 function splitHref(href: string): { pathPart: string; hashPart: string | null } {
   const hashIndex = href.indexOf('#');
@@ -83,13 +196,14 @@ function decodeSafe(value: string): string {
   }
 }
 
-function resolveRelativePath(baseFilePath: string, href: string): string {
+export function resolveRelativePath(baseFilePath: string, href: string): string {
   const { pathPart } = splitHref(href);
-  const decoded = decodeSafe(pathPart);
-  const lastSlash = baseFilePath.lastIndexOf('/');
+  const decoded = decodeSafe(pathPart).replace(/\\/g, '/');
+  const normalizedBase = baseFilePath.replace(/\\/g, '/').replace(/^\/+/, '');
+  const lastSlash = normalizedBase.lastIndexOf('/');
   const baseParts =
     lastSlash >= 0
-      ? baseFilePath.slice(0, lastSlash).split('/').filter(Boolean)
+      ? normalizedBase.slice(0, lastSlash).split('/').filter(Boolean)
       : [];
 
   for (const segment of decoded.split('/')) {
@@ -122,20 +236,11 @@ function getElementsByLocalName(
   return Array.from(root.getElementsByTagName(localName));
 }
 
-function inferMimeType(path: string): string {
+function inferRasterMimeType(path: string): string | null {
   const dotIdx = path.lastIndexOf('.');
-  if (dotIdx < 0) return 'application/octet-stream';
+  if (dotIdx < 0) return null;
   const ext = path.slice(dotIdx + 1).toLowerCase();
-  return IMAGE_MIME_BY_EXT[ext] ?? 'application/octet-stream';
-}
-
-function isDangerousUrl(value: string): boolean {
-  const normalized = value.replace(/[\s\u0000-\u001F]+/g, '').toLowerCase();
-  return (
-    normalized.startsWith('javascript:') ||
-    normalized.startsWith('vbscript:') ||
-    normalized.startsWith('data:text/html')
-  );
+  return RASTER_IMAGE_MIME_BY_EXT[ext] ?? null;
 }
 
 function parseDocumentSafe(
@@ -152,29 +257,227 @@ function parseDocumentSafe(
 
 function extractChapterTitleFromDoc(doc: Document, fallback: string): string {
   const h1 = doc.querySelector('h1');
-  const h1Text = h1?.textContent?.replace(/\s+/g, ' ').trim();
+  const h1Text = cleanMetadataString(h1?.textContent, 200);
   if (h1Text) return h1Text;
 
   const h2 = doc.querySelector('h2');
-  const h2Text = h2?.textContent?.replace(/\s+/g, ' ').trim();
+  const h2Text = cleanMetadataString(h2?.textContent, 200);
   if (h2Text) return h2Text;
 
   const titleEl = doc.querySelector('title');
-  const titleText = titleEl?.textContent?.replace(/\s+/g, ' ').trim();
+  const titleText = cleanMetadataString(titleEl?.textContent, 200);
   if (titleText && titleText.toLowerCase() !== 'unknown') return titleText;
 
   return fallback;
 }
 
+function getAttributeByLocalName(el: Element, targetLocalName: string): string | null {
+  const direct = el.getAttribute(targetLocalName);
+  if (direct !== null) return direct;
+  for (const attr of Array.from(el.attributes)) {
+    if (attr.localName.toLowerCase() === targetLocalName) {
+      return attr.value;
+    }
+  }
+  return null;
+}
+
+function sanitizePositiveIntAttr(raw: string | null, max: number): string | null {
+  if (!raw) return null;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 1 || parsed > max) return null;
+  return String(parsed);
+}
+
 /**
- * Parses an EPUB archive in memory into linear chapters, TOC entries, and sanitized XHTML renderer.
+ * Rebuilds an EPUB XHTML/HTML chapter DOM strictly from scratch using an HTML-only element
+ * and attribute allowlist. Eliminates XML namespace-prefix bypasses, XHTML-to-HTML raw-text
+ * mXSS (`xmp`/`noembed`/`noframes`/`plaintext`), `<template>` blind spots, SVG/SMIL/XLink
+ * vectors, inline `style` UI redressing, and DOM clobbering (`id`/`name`).
+ */
+export function sanitizeChapterMarkupToHtml(
+  doc: Document,
+  chapterZipPath: string,
+  resolveRasterImageUrl: (zipPath: string) => string | null,
+  ownerDocument: Document = document,
+): string {
+  const outputContainer = ownerDocument.createElement('div');
+  const sourceRoot = doc.body ?? doc.documentElement;
+  if (!sourceRoot) {
+    return '';
+  }
+
+  let emittedNodes = 0;
+
+  const createSafeImg = (rawSrc: string | null, altText: string | null): HTMLImageElement | null => {
+    if (!rawSrc) return null;
+    const trimmed = rawSrc.trim();
+    if (!trimmed) return null;
+
+    let resolvedSrc: string | null = null;
+    if (SAFE_RASTER_DATA_URI_RE.test(trimmed)) {
+      resolvedSrc = trimmed;
+    } else if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed) && !trimmed.startsWith('//')) {
+      const imgZipPath = resolveRelativePath(chapterZipPath, trimmed);
+      resolvedSrc = resolveRasterImageUrl(imgZipPath);
+    }
+
+    if (!resolvedSrc) return null;
+    const img = ownerDocument.createElement('img');
+    img.setAttribute('src', resolvedSrc);
+    if (altText) {
+      img.setAttribute('alt', altText.slice(0, 500));
+    }
+    return img;
+  };
+
+  const walk = (sourceNode: Node, targetParent: Node, depth: number): void => {
+    if (depth > MAX_SANITIZE_DEPTH || emittedNodes >= MAX_SANITIZE_NODES) {
+      return;
+    }
+
+    if (sourceNode.nodeType === 3 /* TEXT_NODE */) {
+      const text = sourceNode.nodeValue;
+      if (text) {
+        emittedNodes += 1;
+        targetParent.appendChild(ownerDocument.createTextNode(text));
+      }
+      return;
+    }
+
+    if (sourceNode.nodeType !== 1 /* ELEMENT_NODE */) {
+      return;
+    }
+
+    const sourceEl = sourceNode as Element;
+    // Always inspect `localName`, never `tagName`, so XML namespace prefixes cannot bypass checks.
+    const localTag = sourceEl.localName.toLowerCase();
+
+    if (DROP_SUBTREE_TAGS.has(localTag)) {
+      return;
+    }
+
+    // Preserve cover illustrations wrapped in `<svg><image href="..."/></svg>` as safe raster `<img>`,
+    // while dropping `<svg>` and all other SVG/SMIL elements entirely.
+    if (localTag === 'svg') {
+      const images = getElementsByLocalName(sourceEl, 'image');
+      for (const svgImg of images) {
+        if (emittedNodes >= MAX_SANITIZE_NODES) break;
+        const rawHref = getAttributeByLocalName(svgImg, 'href');
+        const safeImg = createSafeImg(rawHref, null);
+        if (safeImg) {
+          emittedNodes += 1;
+          targetParent.appendChild(safeImg);
+        }
+      }
+      return;
+    }
+
+    if (!ALLOWED_HTML_TAGS.has(localTag)) {
+      // Unknown structural wrapper (e.g. epub-specific custom tags): unwrap safe children only.
+      for (const child of Array.from(sourceEl.childNodes)) {
+        walk(child, targetParent, depth + 1);
+      }
+      return;
+    }
+
+    if (localTag === 'img') {
+      const rawSrc = getAttributeByLocalName(sourceEl, 'src');
+      const alt = getAttributeByLocalName(sourceEl, 'alt');
+      const safeImg = createSafeImg(rawSrc, alt);
+      if (safeImg) {
+        const anchorId = getAttributeByLocalName(sourceEl, 'id');
+        if (anchorId && anchorId.length <= 200) {
+          safeImg.setAttribute('data-epub-id', anchorId);
+        }
+        emittedNodes += 1;
+        targetParent.appendChild(safeImg);
+      }
+      return;
+    }
+
+    const cleanEl = ownerDocument.createElement(localTag);
+    emittedNodes += 1;
+
+    // Store original anchor IDs in `data-epub-id` instead of live `id`/`name` to prevent DOM Clobbering.
+    const rawAnchorId =
+      getAttributeByLocalName(sourceEl, 'id') ??
+      getAttributeByLocalName(sourceEl, 'name');
+    if (rawAnchorId && rawAnchorId.trim() && rawAnchorId.length <= 200) {
+      cleanEl.setAttribute('data-epub-id', rawAnchorId.trim());
+    }
+
+    const dir = getAttributeByLocalName(sourceEl, 'dir');
+    if (dir === 'ltr' || dir === 'rtl' || dir === 'auto') {
+      cleanEl.setAttribute('dir', dir);
+    }
+
+    const lang = getAttributeByLocalName(sourceEl, 'lang');
+    if (lang && /^[A-Za-z0-9-]{2,20}$/.test(lang)) {
+      cleanEl.setAttribute('lang', lang);
+    }
+
+    const titleAttr = getAttributeByLocalName(sourceEl, 'title');
+    if (titleAttr && localTag !== 'a') {
+      cleanEl.setAttribute('title', titleAttr.slice(0, 300));
+    }
+
+    if (localTag === 'td' || localTag === 'th') {
+      const colspan = sanitizePositiveIntAttr(getAttributeByLocalName(sourceEl, 'colspan'), 50);
+      const rowspan = sanitizePositiveIntAttr(getAttributeByLocalName(sourceEl, 'rowspan'), 50);
+      if (colspan) cleanEl.setAttribute('colspan', colspan);
+      if (rowspan) cleanEl.setAttribute('rowspan', rowspan);
+    } else if (localTag === 'ol') {
+      const start = sanitizePositiveIntAttr(getAttributeByLocalName(sourceEl, 'start'), 10_000);
+      if (start) cleanEl.setAttribute('start', start);
+    } else if (localTag === 'a') {
+      const rawHref = getAttributeByLocalName(sourceEl, 'href')?.trim() ?? '';
+      cleanEl.setAttribute('draggable', 'false');
+      if (rawHref) {
+        if (isSafeHttpUrl(rawHref)) {
+          cleanEl.setAttribute('href', rawHref);
+          cleanEl.setAttribute('title', rawHref);
+          cleanEl.setAttribute('data-epub-external', 'true');
+          cleanEl.setAttribute('target', '_blank');
+          cleanEl.setAttribute('rel', 'noopener noreferrer');
+        } else if (rawHref.startsWith('#')) {
+          cleanEl.setAttribute('href', '#');
+          cleanEl.setAttribute('data-epub-path', chapterZipPath);
+          cleanEl.setAttribute('data-epub-hash', decodeSafe(rawHref.slice(1)));
+        } else if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(rawHref) && !rawHref.startsWith('//')) {
+          const targetPath = resolveRelativePath(chapterZipPath, rawHref);
+          const { hashPart } = splitHref(rawHref);
+          cleanEl.setAttribute('href', '#');
+          cleanEl.setAttribute('data-epub-path', targetPath);
+          if (hashPart) {
+            cleanEl.setAttribute('data-epub-hash', hashPart);
+          }
+        }
+        // Any unsafe scheme (javascript:, vbscript:, data:, file:, smb:, mailto:, ms-settings:, etc.)
+        // is intentionally stripped, leaving harmless anchor text only.
+      }
+    }
+
+    for (const child of Array.from(sourceEl.childNodes)) {
+      walk(child, cleanEl, depth + 1);
+    }
+
+    targetParent.appendChild(cleanEl);
+  };
+
+  for (const child of Array.from(sourceRoot.childNodes)) {
+    walk(child, outputContainer, 0);
+  }
+
+  return outputContainer.innerHTML;
+}
+
+/**
+ * Parses an EPUB archive in memory with strict Zip-Bomb bounds, structural caps,
+ * and an allowlist-based HTML sanitizer.
  */
 export function parseEpubBook(bytes: Uint8Array): ParsedEpubBook {
-  const rawFiles = unzipSync(bytes);
-  const filesByNormalized = new Map<string, Uint8Array>();
-  for (const [key, value] of Object.entries(rawFiles)) {
-    filesByNormalized.set(normalizeZipLookupKey(key), value);
-  }
+  const filesByNormalized = safeUnzipEpub(bytes);
 
   const getFile = (zipPath: string): Uint8Array | null =>
     filesByNormalized.get(normalizeZipLookupKey(zipPath)) ?? null;
@@ -201,8 +504,8 @@ export function parseEpubBook(bytes: Uint8Array): ParsedEpubBook {
   }
 
   const opfDoc = parser.parseFromString(strFromU8(opfBytes), 'application/xml');
-  const title = firstElementText(opfDoc, 'title');
-  const author = firstElementText(opfDoc, 'creator');
+  const title = cleanMetadataString(firstElementText(opfDoc, 'title'), 512);
+  const author = cleanMetadataString(firstElementText(opfDoc, 'creator'), 256);
 
   const manifestById = new Map<string, ManifestEntry>();
   let navEntry: ManifestEntry | null = null;
@@ -237,6 +540,7 @@ export function parseEpubBook(bytes: Uint8Array): ParsedEpubBook {
   const chapterIndexByPath = new Map<string, number>();
 
   for (const itemref of getElementsByLocalName(opfDoc, 'itemref')) {
+    if (chapters.length >= MAX_SPINE_CHAPTERS) break;
     if (itemref.getAttribute('linear') === 'no') continue;
     const idref = itemref.getAttribute('idref');
     if (!idref) continue;
@@ -252,7 +556,10 @@ export function parseEpubBook(bytes: Uint8Array): ParsedEpubBook {
       title: `Capítulo ${index + 1}`,
     };
     chapters.push(chapterMeta);
-    chapterIndexByPath.set(normalizeZipLookupKey(entry.zipPath), index);
+    const normPath = normalizeZipLookupKey(entry.zipPath);
+    if (!chapterIndexByPath.has(normPath)) {
+      chapterIndexByPath.set(normPath, index);
+    }
   }
 
   if (chapters.length === 0) {
@@ -262,7 +569,7 @@ export function parseEpubBook(bytes: Uint8Array): ParsedEpubBook {
   const resolveChapterByPath = (zipPath: string): number =>
     chapterIndexByPath.get(normalizeZipLookupKey(zipPath)) ?? -1;
 
-  // Extraer tabla de contenidos (EPUB 3 nav -> EPUB 2 NCX -> fallback spine)
+  // Extraer tabla de contenidos con límites estrictos de profundidad y entradas.
   const toc: EpubTocEntry[] = [];
 
   if (navEntry) {
@@ -278,7 +585,9 @@ export function parseEpubBook(bytes: Uint8Array): ParsedEpubBook {
         ) ?? navEls.find((nav) => nav.querySelector('ol'));
 
       const walkOl = (olEl: Element, depth: number) => {
+        if (depth > MAX_TOC_DEPTH || toc.length >= MAX_TOC_ENTRIES) return;
         for (const child of Array.from(olEl.children)) {
+          if (toc.length >= MAX_TOC_ENTRIES) break;
           if (child.localName !== 'li') continue;
           const anchor = Array.from(child.children).find(
             (el) => el.localName === 'a',
@@ -288,8 +597,8 @@ export function parseEpubBook(bytes: Uint8Array): ParsedEpubBook {
           );
           const href = anchor?.getAttribute('href');
           const label =
-            anchor?.textContent?.replace(/\s+/g, ' ').trim() ||
-            spanLabel?.textContent?.replace(/\s+/g, ' ').trim() ||
+            cleanMetadataString(anchor?.textContent, 200) ||
+            cleanMetadataString(spanLabel?.textContent, 200) ||
             '';
 
           if (href && label) {
@@ -332,7 +641,9 @@ export function parseEpubBook(bytes: Uint8Array): ParsedEpubBook {
         const navMap = getElementsByLocalName(ncxDoc, 'navMap')[0];
 
         const walkNavPoints = (parent: Element, depth: number) => {
+          if (depth > MAX_TOC_DEPTH || toc.length >= MAX_TOC_ENTRIES) return;
           for (const child of Array.from(parent.children)) {
+            if (toc.length >= MAX_TOC_ENTRIES) break;
             if (child.localName !== 'navPoint') continue;
             const navLabel = Array.from(child.children).find(
               (el) => el.localName === 'navLabel',
@@ -343,7 +654,7 @@ export function parseEpubBook(bytes: Uint8Array): ParsedEpubBook {
             const contentEl = Array.from(child.children).find(
               (el) => el.localName === 'content',
             );
-            const label = textEl?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+            const label = cleanMetadataString(textEl?.textContent, 200) ?? '';
             const src = contentEl?.getAttribute('src') ?? '';
 
             if (label && src) {
@@ -372,7 +683,7 @@ export function parseEpubBook(bytes: Uint8Array): ParsedEpubBook {
     }
   }
 
-  // Enriquecer títulos de capítulos desde el TOC o desde los encabezados del capítulo.
+  // Enriquecer títulos de capítulos deduplicando por zipPath para evitar amplificación DoS.
   const tocLabelByChapter = new Map<number, string>();
   for (const entry of toc) {
     if (!tocLabelByChapter.has(entry.chapterIndex)) {
@@ -380,16 +691,29 @@ export function parseEpubBook(bytes: Uint8Array): ParsedEpubBook {
     }
   }
 
+  const extractedTitleCache = new Map<string, string>();
   for (const chapter of chapters) {
     const tocTitle = tocLabelByChapter.get(chapter.index);
     if (tocTitle) {
       chapter.title = tocTitle;
       continue;
     }
+    const normPath = normalizeZipLookupKey(chapter.zipPath);
+    const cached = extractedTitleCache.get(normPath);
+    if (cached !== undefined) {
+      chapter.title = cached || chapter.title;
+      continue;
+    }
     const chBytes = getFile(chapter.zipPath);
     if (chBytes) {
       const chDoc = parseDocumentSafe(chBytes, parser);
-      chapter.title = extractChapterTitleFromDoc(chDoc, chapter.title);
+      const extracted = extractChapterTitleFromDoc(chDoc, '');
+      extractedTitleCache.set(normPath, extracted);
+      if (extracted) {
+        chapter.title = extracted;
+      }
+    } else {
+      extractedTitleCache.set(normPath, '');
     }
   }
 
@@ -407,15 +731,17 @@ export function parseEpubBook(bytes: Uint8Array): ParsedEpubBook {
 
   const blobUrlCache = new Map<string, string>();
 
-  const getOrCreateBlobUrl = (zipPath: string): string | null => {
+  const getOrCreateRasterBlobUrl = (zipPath: string): string | null => {
     const norm = normalizeZipLookupKey(zipPath);
     const existing = blobUrlCache.get(norm);
     if (existing) return existing;
 
+    const mimeType = inferRasterMimeType(zipPath);
+    if (!mimeType) return null;
+
     const entryBytes = getFile(zipPath);
     if (!entryBytes) return null;
 
-    const mimeType = inferMimeType(zipPath);
     const blob = new Blob([entryBytes.slice()], { type: mimeType });
     const url = URL.createObjectURL(blob);
     blobUrlCache.set(norm, url);
@@ -440,97 +766,14 @@ export function parseEpubBook(bytes: Uint8Array): ParsedEpubBook {
 
     const doc = parseDocumentSafe(chapterBytes, parser);
     const resolvedTitle = extractChapterTitleFromDoc(doc, chapter.title);
-
-    const container = document.createElement('div');
-    const sourceRoot = doc.body ?? doc.documentElement;
-    if (sourceRoot) {
-      for (const child of Array.from(sourceRoot.childNodes)) {
-        container.appendChild(document.importNode(child, true));
-      }
-    }
-
-    // Eliminar elementos potencialmente peligrosos o que filtren estilos globales.
-    const allElements = Array.from(container.querySelectorAll('*'));
-    for (const el of allElements) {
-      const tag = el.tagName.toLowerCase();
-      if (UNSAFE_TAGS.has(tag)) {
-        el.remove();
-        continue;
-      }
-
-      // Limpiar manejadores inline y URLs inseguras
-      for (const attr of Array.from(el.attributes)) {
-        const attrName = attr.name.toLowerCase();
-        if (attrName.startsWith('on')) {
-          el.removeAttribute(attr.name);
-          continue;
-        }
-        if (
-          (attrName === 'href' ||
-            attrName === 'src' ||
-            attrName === 'xlink:href' ||
-            attrName === 'action' ||
-            attrName === 'formaction') &&
-          isDangerousUrl(attr.value)
-        ) {
-          el.removeAttribute(attr.name);
-        }
-      }
-
-      if (tag === 'img') {
-        const rawSrc = el.getAttribute('src');
-        if (rawSrc && !rawSrc.startsWith('data:image/') && !rawSrc.startsWith('blob:')) {
-          if (/^https?:\/\//i.test(rawSrc)) {
-            el.removeAttribute('src');
-          } else {
-            const imgZipPath = resolveRelativePath(chapter.zipPath, rawSrc);
-            const blobUrl = getOrCreateBlobUrl(imgZipPath);
-            if (blobUrl) {
-              el.setAttribute('src', blobUrl);
-            } else {
-              el.removeAttribute('src');
-            }
-          }
-        }
-        el.removeAttribute('srcset');
-      } else if (tag === 'image') {
-        const rawHref =
-          el.getAttribute('href') ??
-          el.getAttribute('xlink:href') ??
-          el.getAttributeNS('http://www.w3.org/1999/xlink', 'href');
-        if (rawHref && !rawHref.startsWith('data:image/') && !rawHref.startsWith('blob:')) {
-          const imgZipPath = resolveRelativePath(chapter.zipPath, rawHref);
-          const blobUrl = getOrCreateBlobUrl(imgZipPath);
-          if (blobUrl) {
-            el.setAttribute('href', blobUrl);
-            el.setAttribute('xlink:href', blobUrl);
-          }
-        }
-      } else if (tag === 'a') {
-        const rawHref = el.getAttribute('href');
-        if (!rawHref) continue;
-        if (/^(https?:|mailto:)/i.test(rawHref)) {
-          el.setAttribute('data-epub-external', 'true');
-          el.setAttribute('target', '_blank');
-          el.setAttribute('rel', 'noopener noreferrer');
-        } else if (rawHref.startsWith('#')) {
-          el.setAttribute('data-epub-path', chapter.zipPath);
-          el.setAttribute('data-epub-hash', decodeSafe(rawHref.slice(1)));
-          el.setAttribute('href', '#');
-        } else {
-          const targetPath = resolveRelativePath(chapter.zipPath, rawHref);
-          const { hashPart } = splitHref(rawHref);
-          el.setAttribute('data-epub-path', targetPath);
-          if (hashPart) {
-            el.setAttribute('data-epub-hash', hashPart);
-          }
-          el.setAttribute('href', '#');
-        }
-      }
-    }
+    const html = sanitizeChapterMarkupToHtml(
+      doc,
+      chapter.zipPath,
+      getOrCreateRasterBlobUrl,
+    );
 
     return {
-      html: container.innerHTML,
+      html,
       title: resolvedTitle,
     };
   };

@@ -1,4 +1,4 @@
-import { getDb } from '@/services/db';
+import { invokeDb } from '@/services/db';
 import { formatLocalDateKey } from '@/services/studySessionRepository';
 import {
   ITEM_STATUSES,
@@ -17,6 +17,18 @@ interface ShelfProgressRow {
   name: string;
   totalCount: number;
   finishedCount: number;
+}
+
+interface ReadingStatsRawPayload {
+  items: LibraryItem[];
+  top_shelves: ShelfProgressRow[];
+  highlight_created_at: string[];
+}
+
+interface ActivityStatsRawPayload {
+  items: Array<{ status: ItemStatus; created_at: string; updated_at: string }>;
+  highlight_created_at: string[];
+  note_created_at: string[];
 }
 
 function buildRecentMonthsWindow(monthCount = 6): Array<{
@@ -58,27 +70,8 @@ function computePagesReadForItem(item: LibraryItem): number {
  * Aggregates library reading progress, status/type breakdown, shelf completion, and 6-month activity.
  */
 export async function getReadingStats(): Promise<ReadingStatsSnapshot> {
-  const db = await getDb();
-
-  const [items, topShelves, highlightRows] = await Promise.all([
-    db.select<LibraryItem[]>('SELECT * FROM items'),
-    db.select<ShelfProgressRow[]>(
-      `SELECT
-         s.id AS id,
-         s.name AS name,
-         COUNT(DISTINCT ishf.item_id) AS totalCount,
-         SUM(CASE WHEN i.status = 'finished' THEN 1 ELSE 0 END) AS finishedCount
-       FROM shelves s
-       INNER JOIN item_shelves ishf ON ishf.shelf_id = s.id
-       INNER JOIN items i ON i.id = ishf.item_id
-       GROUP BY s.id
-       ORDER BY totalCount DESC, s.name COLLATE NOCASE ASC
-       LIMIT 6`,
-    ),
-    db.select<Array<{ created_at: string }>>(
-      'SELECT created_at FROM highlights',
-    ),
-  ]);
+  const { items, top_shelves: topShelves, highlight_created_at: highlightDates } =
+    await invokeDb<ReadingStatsRawPayload>('db_get_reading_stats_raw');
 
   const statusMap = new Map<ItemStatus, number>(
     ITEM_STATUSES.map((status) => [status, 0]),
@@ -156,8 +149,8 @@ export async function getReadingStats(): Promise<ReadingStatsSnapshot> {
     }
   }
 
-  for (const h of highlightRows) {
-    const monthKey = h.created_at.slice(0, 7);
+  for (const createdAt of highlightDates) {
+    const monthKey = createdAt.slice(0, 7);
     const bucket = monthlyMap.get(monthKey);
     if (bucket) {
       bucket.highlightsCount += 1;
@@ -195,7 +188,7 @@ export async function getReadingStats(): Promise<ReadingStatsSnapshot> {
         activeProgressCount > 0
           ? Math.round(activeProgressSum / activeProgressCount)
           : 0,
-      totalHighlights: highlightRows.length,
+      totalHighlights: highlightDates.length,
       pdfCount,
       epubCount,
     },
@@ -317,25 +310,27 @@ function buildActivityBuckets(range: ActivityRange): ActivityBucket[] {
   return buckets;
 }
 
+function computeActivitySinceIso(range: ActivityRange): string {
+  const now = new Date();
+  const marginDays = range === '7d' ? 9 : range === '30d' ? 32 : 195;
+  const since = new Date(now.getTime() - marginDays * 24 * 60 * 60 * 1000);
+  return since.toISOString();
+}
+
 /**
  * Aggregates added items, finished items, highlights, and Markdown notes across 6m, 30d, or 7d.
  */
 export async function getActivityStats(
   range: ActivityRange,
 ): Promise<ActivityStatsSnapshot> {
-  const db = await getDb();
-
-  const [itemRows, highlightRows, noteRows] = await Promise.all([
-    db.select<Array<{ status: ItemStatus; created_at: string; updated_at: string }>>(
-      'SELECT status, created_at, updated_at FROM items',
-    ),
-    db.select<Array<{ created_at: string }>>(
-      'SELECT created_at FROM highlights',
-    ),
-    db.select<Array<{ created_at: string }>>(
-      'SELECT created_at FROM notes',
-    ),
-  ]);
+  const sinceIso = computeActivitySinceIso(range);
+  const {
+    items: itemRows,
+    highlight_created_at: highlightDates,
+    note_created_at: noteDates,
+  } = await invokeDb<ActivityStatsRawPayload>('db_get_activity_stats_raw', {
+    sinceIso,
+  });
 
   const buckets = buildActivityBuckets(range);
   const bucketMap = new Map(buckets.map((bucket) => [bucket.key, bucket]));
@@ -357,16 +352,16 @@ export async function getActivityStats(
     }
   }
 
-  for (const highlight of highlightRows) {
-    const key = toKey(highlight.created_at);
+  for (const createdAt of highlightDates) {
+    const key = toKey(createdAt);
     if (key) {
       const bucket = bucketMap.get(key);
       if (bucket) bucket.highlightsCount += 1;
     }
   }
 
-  for (const note of noteRows) {
-    const key = toKey(note.created_at);
+  for (const createdAt of noteDates) {
+    const key = toKey(createdAt);
     if (key) {
       const bucket = bucketMap.get(key);
       if (bucket) bucket.notesCount += 1;

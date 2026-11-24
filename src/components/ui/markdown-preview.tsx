@@ -1,5 +1,7 @@
 import { memo, type ReactNode } from 'react';
+import { isSafeHttpUrl } from '@/lib/validation';
 import { cn } from '@/lib/utils';
+import { openExternalUrl } from '@/services/fileService';
 
 interface MarkdownPreviewProps {
   content: string;
@@ -10,17 +12,9 @@ interface MarkdownPreviewProps {
   onToggleChecklist?: (lineIndex: number, checked: boolean) => void;
 }
 
+// Excludes `[` inside bracketed spans so unclosed `[[[` runs fail in O(1) without ReDoS backtracking.
 const INLINE_TOKEN_REGEX =
-  /(\[\[[^\]\n]+\]\]|`[^`\n]+`|\*\*[^*\n]+?\*\*|~~[^~\n]+?~~|\*[^*\n]+?\*|\[[^\]\n]+\]\([^\s)]+\)|#[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9/_-]{0,40})/g;
-
-function isSafeHttpUrl(rawUrl: string): boolean {
-  try {
-    const parsed = new URL(rawUrl);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
+  /(\[\[[^[\]\n]+\]\]|`[^`\n]+`|\*\*[^*\n]+?\*\*|~~[^~\n]+?~~|\*[^*\n]+?\*|\[[^[\]\n]+\]\([^\s)]+\)|#[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9/_-]{0,40})/g;
 
 interface InlineOptions {
   variant: 'compact' | 'document';
@@ -143,8 +137,14 @@ function renderInline(
             <a
               key={key}
               href={url}
+              title={url}
+              draggable={false}
               target="_blank"
               rel="noreferrer noopener"
+              onClick={(event) => {
+                event.preventDefault();
+                void openExternalUrl(url).catch(() => {});
+              }}
               className="text-accent-brand underline underline-offset-2 hover:text-accent-brand/80"
             >
               {renderInline(label, options, depth + 1)}

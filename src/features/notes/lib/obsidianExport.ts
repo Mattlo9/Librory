@@ -1,6 +1,12 @@
 import { invoke } from '@tauri-apps/api/core';
-import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
+import {
+  escapeYamlString,
+  sanitizeNoteFilename,
+  sanitizeNoteFolder,
+} from '@/lib/validation';
 import type { Highlight, NoteWithItem } from '@/types/domain';
+
+export { sanitizeNoteFilename };
 
 interface VaultExportEntryPayload {
   filename: string;
@@ -13,43 +19,21 @@ export interface VaultExportResult {
   rootDir: string;
 }
 
-function escapeYamlString(value: string): string {
-  const escaped = value
-    .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"')
-    .replace(/\r?\n/g, ' ');
-  return `"${escaped}"`;
-}
-
-/**
- * Produces a safe `.md` filename compatible with Windows and Obsidian vaults.
- */
-export function sanitizeNoteFilename(title: string): string {
-  const stripped = title
-    .trim()
-    .replace(/\.md$/i, '')
-    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .replace(/^[.\s]+|[.\s]+$/g, '')
-    .slice(0, 120)
-    .replace(/^[.\s]+|[.\s]+$/g, '');
-
-  return stripped ? `${stripped}.md` : 'Nota sin titulo.md';
-}
-
 /**
  * Formats a note with Obsidian-compatible YAML frontmatter while preserving [[wikilinks]].
+ * All dynamic fields (including timestamps) are quoted and line-break/control-escaped.
  */
 export function buildObsidianMarkdown(note: NoteWithItem): string {
   const frontmatter: string[] = [
     '---',
     `title: ${escapeYamlString(note.title || 'Nota sin título')}`,
-    `created: ${note.created_at}`,
-    `updated: ${note.updated_at}`,
+    `created: ${escapeYamlString(note.created_at)}`,
+    `updated: ${escapeYamlString(note.updated_at)}`,
   ];
 
-  if (note.folder.trim()) {
-    frontmatter.push(`folder: ${escapeYamlString(note.folder.trim())}`);
+  const safeFolder = sanitizeNoteFolder(note.folder);
+  if (safeFolder) {
+    frontmatter.push(`folder: ${escapeYamlString(safeFolder)}`);
   }
   if (note.item_title) {
     frontmatter.push(`book: ${escapeYamlString(note.item_title)}`);
@@ -93,30 +77,20 @@ export function formatHighlightAsMarkdown(highlight: Highlight): string {
 }
 
 /**
- * Opens a native save dialog and writes a single Obsidian-formatted `.md` note.
+ * Invokes the Rust-owned native save dialog and writes a single Obsidian-formatted `.md` note.
  */
 export async function exportSingleNoteToFile(
   note: NoteWithItem,
 ): Promise<string | null> {
-  const targetPath = await saveDialog({
-    title: 'Exportar nota Markdown',
-    defaultPath: sanitizeNoteFilename(note.title),
-    filters: [{ name: 'Markdown', extensions: ['md'] }],
-  });
-
-  if (!targetPath) {
-    return null;
-  }
-
   const content = buildObsidianMarkdown(note);
-  return invoke<string>('export_markdown_file', {
-    targetPath,
+  return invoke<string | null>('export_markdown_file', {
+    suggestedFilename: sanitizeNoteFilename(note.title),
     content,
   });
 }
 
 /**
- * Opens a directory picker and exports all notes into nested folder structure for Obsidian.
+ * Invokes the Rust-owned native folder picker and exports all notes into a nested Obsidian vault.
  */
 export async function exportNotesVaultToFolder(
   notes: NoteWithItem[],
@@ -125,26 +99,13 @@ export async function exportNotesVaultToFolder(
     return null;
   }
 
-  const selected = await openDialog({
-    title: 'Seleccionar carpeta para exportar bóveda (Obsidian)',
-    directory: true,
-    multiple: false,
-    canCreateDirectories: true,
-  });
-
-  const rootDir = Array.isArray(selected) ? selected[0] : selected;
-  if (!rootDir) {
-    return null;
-  }
-
   const entries: VaultExportEntryPayload[] = notes.map((note) => ({
     filename: sanitizeNoteFilename(note.title),
-    folder: note.folder,
+    folder: sanitizeNoteFolder(note.folder),
     content: buildObsidianMarkdown(note),
   }));
 
-  return invoke<VaultExportResult>('export_obsidian_vault', {
-    rootDir,
+  return invoke<VaultExportResult | null>('export_obsidian_vault', {
     entries,
   });
 }

@@ -1,5 +1,6 @@
 import { sanitizeFtsQuery } from '@/lib/text';
-import { getDb } from '@/services/db';
+import { isSafeItemFilePath, isSafeStoredCoverPath } from '@/lib/validation';
+import { invokeDb } from '@/services/db';
 import type {
   CreateItemInput,
   FtsSearchResult,
@@ -9,301 +10,54 @@ import type {
   LibraryItem,
   LibraryItemWithRelations,
   SaveReadingProgressInput,
-  SortOption,
   UpdateItemInput,
 } from '@/types/domain';
 
-function resolveOrderClause(sortBy?: SortOption, recentOnly?: boolean): string {
-  if (recentOnly) {
-    return 'ORDER BY i.last_opened_at DESC';
-  }
-  switch (sortBy) {
-    case 'title_asc':
-      return 'ORDER BY i.title COLLATE NOCASE ASC';
-    case 'author_asc':
-      return 'ORDER BY CASE WHEN i.author = \'\' THEN 1 ELSE 0 END, i.author COLLATE NOCASE ASC, i.title COLLATE NOCASE ASC';
-    case 'created_desc':
-    default:
-      return 'ORDER BY i.created_at DESC';
-  }
-}
-
-function buildFilterParts(filter: ItemFilter): {
-  emptyResult: boolean;
-  joinsSql: string;
-  whereSql: string;
-  params: unknown[];
-} {
-  const joins: string[] = [];
-  const clauses: string[] = [];
-  const params: unknown[] = [];
-
-  if (filter.shelfIds !== undefined) {
-    if (filter.shelfIds.length === 0) {
-      return { emptyResult: true, joinsSql: '', whereSql: '', params: [] };
-    }
-    joins.push('INNER JOIN item_shelves ishf ON ishf.item_id = i.id');
-    const placeholders = filter.shelfIds.map((shelfId) => {
-      params.push(shelfId);
-      return `$${params.length}`;
-    });
-    clauses.push(`ishf.shelf_id IN (${placeholders.join(', ')})`);
-  } else if (filter.shelfId) {
-    joins.push('INNER JOIN item_shelves ishf ON ishf.item_id = i.id');
-    params.push(filter.shelfId);
-    clauses.push(`ishf.shelf_id = $${params.length}`);
-  }
-
-  if (filter.tagId) {
-    joins.push('INNER JOIN item_tags itag ON itag.item_id = i.id');
-    params.push(filter.tagId);
-    clauses.push(`itag.tag_id = $${params.length}`);
-  }
-
-  if (filter.status) {
-    params.push(filter.status);
-    clauses.push(`i.status = $${params.length}`);
-  }
-
-  if (filter.type) {
-    params.push(filter.type);
-    clauses.push(`i.type = $${params.length}`);
-  }
-
-  if (filter.favoriteOnly) {
-    clauses.push('i.is_favorite = 1');
-  }
-
-  if (filter.recentOnly) {
-    clauses.push('i.last_opened_at IS NOT NULL');
-  }
-
-  return {
-    emptyResult: false,
-    joinsSql: joins.join('\n    '),
-    whereSql: clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '',
-    params,
-  };
-}
-
 export async function listItems(filter: ItemFilter = {}): Promise<LibraryItem[]> {
-  const { emptyResult, joinsSql, whereSql, params } = buildFilterParts(filter);
-  if (emptyResult) {
-    return [];
-  }
-
-  const db = await getDb();
-  const orderSql = resolveOrderClause(filter.sortBy, filter.recentOnly);
-
-  let limitSql = '';
-  if (typeof filter.limit === 'number' && filter.limit > 0) {
-    params.push(filter.limit);
-    limitSql = `LIMIT $${params.length}`;
-  }
-
-  const sql = `
-    SELECT DISTINCT i.*
-    FROM items i
-    ${joinsSql}
-    ${whereSql}
-    ${orderSql}
-    ${limitSql}
-  `;
-
-  return db.select<LibraryItem[]>(sql, params);
+  return invokeDb<LibraryItem[]>('db_list_items', { filter });
 }
-
-const SQLITE_IN_CHUNK_SIZE = 500;
 
 export async function listItemsWithRelations(
   filter: ItemFilter = {},
 ): Promise<LibraryItemWithRelations[]> {
-  const items = await listItems(filter);
-  if (items.length === 0) {
-    return [];
-  }
-
-  const db = await getDb();
-  const itemIds = items.map((item) => item.id);
-
-  const shelvesByItem = new Map<string, string[]>();
-  const tagsByItem = new Map<string, string[]>();
-
-  const chunkPromises: Array<
-    Promise<
-      [
-        Array<{ item_id: string; shelf_id: string }>,
-        Array<{ item_id: string; tag_id: string }>,
-      ]
-    >
-  > = [];
-
-  for (let i = 0; i < itemIds.length; i += SQLITE_IN_CHUNK_SIZE) {
-    const chunk = itemIds.slice(i, i + SQLITE_IN_CHUNK_SIZE);
-    const placeholders = chunk.map((_, idx) => `$${idx + 1}`).join(', ');
-    chunkPromises.push(
-      Promise.all([
-        db.select<Array<{ item_id: string; shelf_id: string }>>(
-          `SELECT item_id, shelf_id FROM item_shelves WHERE item_id IN (${placeholders})`,
-          chunk,
-        ),
-        db.select<Array<{ item_id: string; tag_id: string }>>(
-          `SELECT item_id, tag_id FROM item_tags WHERE item_id IN (${placeholders})`,
-          chunk,
-        ),
-      ]),
-    );
-  }
-
-  const chunkResults = await Promise.all(chunkPromises);
-
-  for (const [shelfLinks, tagLinks] of chunkResults) {
-    for (const link of shelfLinks) {
-      let list = shelvesByItem.get(link.item_id);
-      if (!list) {
-        list = [];
-        shelvesByItem.set(link.item_id, list);
-      }
-      list.push(link.shelf_id);
-    }
-
-    for (const link of tagLinks) {
-      let list = tagsByItem.get(link.item_id);
-      if (!list) {
-        list = [];
-        tagsByItem.set(link.item_id, list);
-      }
-      list.push(link.tag_id);
-    }
-  }
-
-  return items.map((item) => ({
-    ...item,
-    shelf_ids: shelvesByItem.get(item.id) ?? [],
-    tag_ids: tagsByItem.get(item.id) ?? [],
-  }));
+  return invokeDb<LibraryItemWithRelations[]>('db_list_items_with_relations', { filter });
 }
 
 export async function getItemById(id: string): Promise<LibraryItem | null> {
-  const db = await getDb();
-  const rows = await db.select<LibraryItem[]>(
-    'SELECT * FROM items WHERE id = $1 LIMIT 1',
-    [id],
-  );
-  return rows[0] ?? null;
+  return invokeDb<LibraryItem | null>('db_get_item_by_id', { id });
 }
 
 export async function getItemWithRelationsById(
   id: string,
 ): Promise<LibraryItemWithRelations | null> {
-  const db = await getDb();
-  const [item, shelfLinks, tagLinks] = await Promise.all([
-    getItemById(id),
-    db.select<Array<{ shelf_id: string }>>(
-      'SELECT shelf_id FROM item_shelves WHERE item_id = $1',
-      [id],
-    ),
-    db.select<Array<{ tag_id: string }>>(
-      'SELECT tag_id FROM item_tags WHERE item_id = $1',
-      [id],
-    ),
-  ]);
-
-  if (!item) return null;
-
-  return {
-    ...item,
-    shelf_ids: shelfLinks.map((row) => row.shelf_id),
-    tag_ids: tagLinks.map((row) => row.tag_id),
-  };
+  return invokeDb<LibraryItemWithRelations | null>(
+    'db_get_item_with_relations_by_id',
+    { id },
+  );
 }
 
 export async function createItem(input: CreateItemInput): Promise<LibraryItem> {
-  const db = await getDb();
-  const id = input.id ?? crypto.randomUUID();
-  const now = new Date().toISOString();
-
-  await db.execute(
-    `INSERT INTO items (
-      id, title, author, type, status, file_path, cover_path,
-      file_format, file_hash, file_size, page_count, current_page,
-      is_favorite, notes, created_at, updated_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
-    [
-      id,
-      input.title,
-      input.author ?? '',
-      input.type ?? 'unsorted',
-      input.status ?? 'inbox',
-      input.file_path,
-      input.cover_path ?? null,
-      input.file_format,
-      input.file_hash ?? null,
-      input.file_size ?? 0,
-      input.page_count ?? 0,
-      input.current_page ?? 0,
-      input.is_favorite ?? 0,
-      input.notes ?? '',
-      now,
-      now,
-    ],
-  );
-
-  const created = await getItemById(id);
-  if (!created) {
-    throw new Error(`No se pudo recuperar el item recién creado (${id}).`);
+  if (!isSafeItemFilePath(input.file_path)) {
+    throw new Error('Ruta de archivo del recurso no permitida.');
   }
-  return created;
+  if (input.cover_path && !isSafeStoredCoverPath(input.cover_path)) {
+    throw new Error('Ruta de portada no permitida.');
+  }
+  return invokeDb<LibraryItem>('db_create_item', { input });
 }
 
 export async function updateItem(
   id: string,
   patch: UpdateItemInput,
 ): Promise<LibraryItem | null> {
-  const db = await getDb();
-  const assignments: string[] = [];
-  const params: unknown[] = [];
-
-  const updatableFields: Array<keyof UpdateItemInput> = [
-    'title',
-    'author',
-    'type',
-    'status',
-    'cover_path',
-    'page_count',
-    'current_page',
-    'is_favorite',
-    'notes',
-    'last_opened_at',
-  ];
-
-  for (const field of updatableFields) {
-    const value = patch[field];
-    if (value !== undefined) {
-      params.push(value);
-      assignments.push(`${field} = $${params.length}`);
-    }
+  if (patch.cover_path && !isSafeStoredCoverPath(patch.cover_path)) {
+    throw new Error('Ruta de portada no permitida.');
   }
-
-  if (assignments.length === 0) {
-    return getItemById(id);
-  }
-
-  params.push(new Date().toISOString());
-  assignments.push(`updated_at = $${params.length}`);
-  params.push(id);
-
-  await db.execute(
-    `UPDATE items SET ${assignments.join(', ')} WHERE id = $${params.length}`,
-    params,
-  );
-
-  return getItemById(id);
+  return invokeDb<LibraryItem | null>('db_update_item', { id, patch });
 }
 
 export async function deleteItem(id: string): Promise<void> {
-  const db = await getDb();
-  await db.execute('DELETE FROM items WHERE id = $1', [id]);
+  await invokeDb<void>('db_delete_item', { id });
 }
 
 export async function bulkUpdateItemsStatus(
@@ -312,18 +66,10 @@ export async function bulkUpdateItemsStatus(
 ): Promise<void> {
   const uniqueIds = Array.from(new Set(ids));
   if (uniqueIds.length === 0) return;
-
-  const db = await getDb();
-  const now = new Date().toISOString();
-
-  for (let i = 0; i < uniqueIds.length; i += SQLITE_IN_CHUNK_SIZE) {
-    const chunk = uniqueIds.slice(i, i + SQLITE_IN_CHUNK_SIZE);
-    const placeholders = chunk.map((_, idx) => `$${idx + 3}`).join(', ');
-    await db.execute(
-      `UPDATE items SET status = $1, updated_at = $2 WHERE id IN (${placeholders})`,
-      [status, now, ...chunk],
-    );
-  }
+  await invokeDb<void>('db_bulk_update_items_status', {
+    ids: uniqueIds,
+    status,
+  });
 }
 
 export async function getItemsFilePathsByIds(
@@ -331,171 +77,65 @@ export async function getItemsFilePathsByIds(
 ): Promise<Array<{ id: string; file_path: string; cover_path: string | null }>> {
   const uniqueIds = Array.from(new Set(ids));
   if (uniqueIds.length === 0) return [];
-
-  const db = await getDb();
-  const rows: Array<{ id: string; file_path: string; cover_path: string | null }> = [];
-
-  for (let i = 0; i < uniqueIds.length; i += SQLITE_IN_CHUNK_SIZE) {
-    const chunk = uniqueIds.slice(i, i + SQLITE_IN_CHUNK_SIZE);
-    const placeholders = chunk.map((_, idx) => `$${idx + 1}`).join(', ');
-    const chunkRows = await db.select<
-      Array<{ id: string; file_path: string; cover_path: string | null }>
-    >(
-      `SELECT id, file_path, cover_path FROM items WHERE id IN (${placeholders})`,
-      chunk,
-    );
-    rows.push(...chunkRows);
-  }
-
-  return rows;
+  return invokeDb<Array<{ id: string; file_path: string; cover_path: string | null }>>(
+    'db_get_items_file_paths_by_ids',
+    { ids: uniqueIds },
+  );
 }
 
-export async function bulkDeleteItems(ids: string[]): Promise<void> {
+export async function bulkDeleteItems(
+  ids: string[],
+): Promise<Array<{ id: string; file_path: string; cover_path: string | null }>> {
   const uniqueIds = Array.from(new Set(ids));
-  if (uniqueIds.length === 0) return;
-
-  const db = await getDb();
-  for (let i = 0; i < uniqueIds.length; i += SQLITE_IN_CHUNK_SIZE) {
-    const chunk = uniqueIds.slice(i, i + SQLITE_IN_CHUNK_SIZE);
-    const placeholders = chunk.map((_, idx) => `$${idx + 1}`).join(', ');
-    await db.execute(
-      `DELETE FROM items WHERE id IN (${placeholders})`,
-      chunk,
-    );
-  }
+  if (uniqueIds.length === 0) return [];
+  return invokeDb<Array<{ id: string; file_path: string; cover_path: string | null }>>(
+    'db_bulk_delete_items',
+    { ids: uniqueIds },
+  );
 }
 
 export async function saveReadingProgress(
   input: SaveReadingProgressInput,
 ): Promise<LibraryItem | null> {
-  const existing = await getItemById(input.itemId);
-  if (!existing) {
-    return null;
+  if (!Number.isFinite(input.currentPage)) {
+    throw new Error('La página actual debe ser un número válido.');
   }
-
-  const resolvedPageCount =
-    input.pageCount && input.pageCount > 0 ? input.pageCount : existing.page_count;
-
-  const flooredPage = Math.max(1, Math.floor(input.currentPage));
-  const clampedPage =
-    resolvedPageCount > 0 ? Math.min(resolvedPageCount, flooredPage) : flooredPage;
-
-  let nextStatus: ItemStatus = existing.status;
-  if (input.markFinished === true) {
-    nextStatus = 'finished';
-  } else if (input.markFinished === false && existing.status === 'finished') {
-    nextStatus = 'reading';
-  } else if (
-    input.markFinished === undefined &&
-    (existing.status === 'inbox' || existing.status === 'to_read')
-  ) {
-    nextStatus = 'reading';
+  if (input.pageCount !== undefined && !Number.isFinite(input.pageCount)) {
+    throw new Error('El total de páginas debe ser un número válido.');
   }
-
-  return updateItem(input.itemId, {
-    current_page: clampedPage,
-    page_count:
-      resolvedPageCount !== existing.page_count ? resolvedPageCount : undefined,
-    status: nextStatus,
-    last_opened_at: new Date().toISOString(),
-  });
+  return invokeDb<LibraryItem | null>('db_save_reading_progress', { input });
 }
 
 export async function searchItemsFts(
   query: string,
   limit = 40,
 ): Promise<FtsSearchResult[]> {
-  const matchExpr = sanitizeFtsQuery(query);
-  if (!matchExpr) {
+  if (!sanitizeFtsQuery(query)) {
     return [];
   }
-
-  const db = await getDb();
-  const rows = await db.select<Array<LibraryItem & { fts_rank: number }>>(
-    `SELECT i.*, bm25(items_fts) AS fts_rank
-     FROM items_fts
-     INNER JOIN items i ON i.id = items_fts.item_id
-     WHERE items_fts MATCH $1
-     ORDER BY fts_rank ASC
-     LIMIT $2`,
-    [matchExpr, limit],
-  );
-
-  return rows.map(({ fts_rank, ...item }) => ({
-    item,
-    rank: fts_rank,
-  }));
+  const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(200, Math.floor(limit)) : 40;
+  return invokeDb<FtsSearchResult[]>('db_search_items_fts', {
+    query,
+    limit: safeLimit,
+  });
 }
 
 export async function getItemCountsByType(
   filter: Omit<ItemFilter, 'type' | 'sortBy' | 'limit'> = {},
 ): Promise<Record<ItemType | 'all', number>> {
-  const counts: Record<ItemType | 'all', number> = {
-    all: 0,
-    book: 0,
-    summary: 0,
-    article: 0,
-    paper: 0,
-    course: 0,
-    unsorted: 0,
-  };
-
-  const { emptyResult, joinsSql, whereSql, params } = buildFilterParts(filter);
-  if (emptyResult) {
-    return counts;
-  }
-
-  const db = await getDb();
-  const rows = await db.select<Array<{ type: ItemType; count: number }>>(
-    `SELECT i.type, COUNT(DISTINCT i.id) AS count
-     FROM items i
-     ${joinsSql}
-     ${whereSql}
-     GROUP BY i.type`,
-    params,
+  return invokeDb<Record<ItemType | 'all', number>>(
+    'db_get_item_counts_by_type',
+    { filter },
   );
-
-  for (const row of rows) {
-    counts[row.type] = row.count;
-    counts.all += row.count;
-  }
-
-  return counts;
 }
 
 export async function getItemCountsByStatus(
   filter: Omit<ItemFilter, 'status' | 'sortBy' | 'limit'> = {},
 ): Promise<Record<ItemStatus | 'all', number>> {
-  const counts: Record<ItemStatus | 'all', number> = {
-    all: 0,
-    inbox: 0,
-    to_read: 0,
-    reading: 0,
-    reference: 0,
-    finished: 0,
-  };
-
-  const { emptyResult, joinsSql, whereSql, params } = buildFilterParts(filter);
-  if (emptyResult) {
-    return counts;
-  }
-
-  const db = await getDb();
-  const rows = await db.select<Array<{ status: ItemStatus; count: number }>>(
-    `SELECT i.status, COUNT(DISTINCT i.id) AS count
-     FROM items i
-     ${joinsSql}
-     ${whereSql}
-     GROUP BY i.status`,
-    params,
+  return invokeDb<Record<ItemStatus | 'all', number>>(
+    'db_get_item_counts_by_status',
+    { filter },
   );
-
-  for (const row of rows) {
-    counts[row.status] = row.count;
-    counts.all += row.count;
-  }
-
-  return counts;
 }
 
 export async function getNavigationCounts(): Promise<{
@@ -506,90 +146,25 @@ export async function getNavigationCounts(): Promise<{
   highlights: number;
   notes: number;
 }> {
-  const db = await getDb();
-  const [statusRows, favoriteRows, recentRows, highlightsRows, notesRows] =
-    await Promise.all([
-      db.select<Array<{ status: ItemStatus; count: number }>>(
-        'SELECT status, COUNT(*) AS count FROM items GROUP BY status',
-      ),
-      db.select<Array<{ count: number }>>(
-        'SELECT COUNT(*) AS count FROM items WHERE is_favorite = 1',
-      ),
-      db.select<Array<{ count: number }>>(
-        'SELECT COUNT(*) AS count FROM items WHERE last_opened_at IS NOT NULL',
-      ),
-      db.select<Array<{ count: number }>>(
-        'SELECT COUNT(*) AS count FROM highlights',
-      ),
-      db.select<Array<{ count: number }>>(
-        'SELECT COUNT(*) AS count FROM notes',
-      ),
-    ]);
-
-  let inbox = 0;
-  let all = 0;
-  for (const row of statusRows) {
-    if (row.status === 'inbox') {
-      inbox = row.count;
-    }
-    all += row.count;
-  }
-
-  return {
-    inbox,
-    all,
-    favorites: favoriteRows[0]?.count ?? 0,
-    recent: recentRows[0]?.count ?? 0,
-    highlights: highlightsRows[0]?.count ?? 0,
-    notes: notesRows[0]?.count ?? 0,
-  };
+  return invokeDb('db_get_navigation_counts');
 }
 
 export async function hasSampleItems(): Promise<boolean> {
-  const db = await getDb();
-  const rows = await db.select<Array<{ count: number }>>(
-    "SELECT COUNT(*) AS count FROM items WHERE file_path LIKE 'sample/%'",
-  );
-  return (rows[0]?.count ?? 0) > 0;
+  return invokeDb<boolean>('db_has_sample_items');
 }
 
 export async function listAllFileHashes(): Promise<string[]> {
-  const db = await getDb();
-  const rows = await db.select<Array<{ file_hash: string }>>(
-    'SELECT file_hash FROM items WHERE file_hash IS NOT NULL',
-  );
-  return rows.map((row) => row.file_hash);
+  return invokeDb<string[]>('db_list_all_file_hashes');
 }
 
 /**
- * Phase 1 smoke test: verifies FTS5 triggers and accent-insensitive unicode61 tokenization.
+ * Verifies FTS5 triggers and accent-insensitive unicode61 tokenization in an isolated in-memory DB.
  */
 export async function runFtsSmokeTest(): Promise<{
   ok: boolean;
   matchedTitle: string | null;
 }> {
-  const tempId = `smoke-${crypto.randomUUID()}`;
-
-  try {
-    await createItem({
-      id: tempId,
-      title: 'Filosofía Local-First',
-      author: 'Prueba de Sistema',
-      type: 'paper',
-      status: 'inbox',
-      file_path: `books/${tempId}.pdf`,
-      file_format: 'pdf',
-      notes: 'Verificación de índice FTS5 sin diacríticos.',
-    });
-
-    const matches = await searchItemsFts('filosofia');
-    const matched = matches.find((entry) => entry.item.id === tempId);
-
-    return {
-      ok: Boolean(matched),
-      matchedTitle: matched?.item.title ?? null,
-    };
-  } finally {
-    await deleteItem(tempId);
-  }
+  return invokeDb<{ ok: boolean; matchedTitle: string | null }>(
+    'db_run_fts_smoke_test',
+  );
 }

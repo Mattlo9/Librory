@@ -587,13 +587,58 @@ export const usePomodoroStore = create<PomodoroState>()(
         linkedItemId: state.linkedItemId,
         linkedItemTitle: state.linkedItemTitle,
       }),
-      onRehydrateStorage: () => (state) => {
-        if (!state) return;
-        if (state.status === 'idle' && state.accumulatedSeconds === 0) {
-          const fullSeconds = getPhaseMinutes(state.phase, state) * 60;
-          state.plannedSeconds = fullSeconds;
-          state.remainingSeconds = fullSeconds;
+      merge: (persistedState, currentState) => {
+        if (!persistedState || typeof persistedState !== 'object') {
+          return currentState;
         }
+        const raw = persistedState as Record<string, unknown>;
+        const focusMinutes =
+          typeof raw.focusMinutes === 'number'
+            ? clampMinutes(raw.focusMinutes, 1, 180)
+            : currentState.focusMinutes;
+        const shortBreakMinutes =
+          typeof raw.shortBreakMinutes === 'number'
+            ? clampMinutes(raw.shortBreakMinutes, 1, 60)
+            : currentState.shortBreakMinutes;
+        const longBreakMinutes =
+          typeof raw.longBreakMinutes === 'number'
+            ? clampMinutes(raw.longBreakMinutes, 1, 90)
+            : currentState.longBreakMinutes;
+        const cyclesBeforeLongBreak =
+          typeof raw.cyclesBeforeLongBreak === 'number'
+            ? clampMinutes(raw.cyclesBeforeLongBreak, 2, 8)
+            : currentState.cyclesBeforeLongBreak;
+        const soundEnabled =
+          typeof raw.soundEnabled === 'boolean'
+            ? raw.soundEnabled
+            : currentState.soundEnabled;
+        const autoStartNext =
+          typeof raw.autoStartNext === 'boolean'
+            ? raw.autoStartNext
+            : currentState.autoStartNext;
+        const linkedItemId =
+          typeof raw.linkedItemId === 'string' && raw.linkedItemId.length <= 80
+            ? raw.linkedItemId
+            : null;
+        const linkedItemTitle =
+          linkedItemId && typeof raw.linkedItemTitle === 'string'
+            ? raw.linkedItemTitle.slice(0, 512)
+            : null;
+        const fullSeconds = focusMinutes * 60;
+
+        return {
+          ...currentState,
+          focusMinutes,
+          shortBreakMinutes,
+          longBreakMinutes,
+          cyclesBeforeLongBreak,
+          soundEnabled,
+          autoStartNext,
+          linkedItemId,
+          linkedItemTitle,
+          plannedSeconds: fullSeconds,
+          remainingSeconds: fullSeconds,
+        };
       },
     },
   ),

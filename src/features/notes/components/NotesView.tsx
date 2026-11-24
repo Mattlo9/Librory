@@ -111,7 +111,8 @@ function buildSnippet(content: string): string {
 
 function extractWikilinkTargets(content: string): string[] {
   const targets: string[] = [];
-  const regex = /\[\[([^\]\n]+)\]\]/g;
+  // Excludes `[` inside brackets so unclosed `[[[` runs fail in O(1) without ReDoS backtracking.
+  const regex = /\[\[([^[\]\n]+)\]\]/g;
   for (const match of content.matchAll(regex)) {
     const inner = match[1] ?? '';
     const pipeIdx = inner.indexOf('|');
@@ -319,6 +320,16 @@ export function NotesView({ onOpenItem, onOpenReader }: NotesViewProps) {
   const linkedHighlightsQuery = useItemHighlights(activeItemId);
   const linkedHighlights = linkedHighlightsQuery.data ?? [];
 
+  const deferredPreviewContent = useDeferredValue(draft?.content ?? '');
+
+  const wikilinksByNoteId = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const note of allNotes) {
+      map.set(note.id, new Set(extractWikilinkTargets(note.content)));
+    }
+    return map;
+  }, [allNotes]);
+
   const backlinks = useMemo(() => {
     const activeTitle = (draft?.title ?? selectedNote?.title ?? '')
       .trim()
@@ -327,10 +338,9 @@ export function NotesView({ onOpenItem, onOpenReader }: NotesViewProps) {
 
     return allNotes.filter((other) => {
       if (other.id === selectedNote.id) return false;
-      const targets = extractWikilinkTargets(other.content);
-      return targets.includes(activeTitle);
+      return wikilinksByNoteId.get(other.id)?.has(activeTitle) ?? false;
     });
-  }, [allNotes, draft?.title, selectedNote]);
+  }, [allNotes, draft?.title, selectedNote, wikilinksByNoteId]);
 
   const selectNote = useCallback(
     (nextId: string) => {
@@ -661,6 +671,7 @@ export function NotesView({ onOpenItem, onOpenReader }: NotesViewProps) {
           <div className="relative">
             <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
+              maxLength={256}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Buscar en notas..."
@@ -1307,9 +1318,9 @@ export function NotesView({ onOpenItem, onOpenReader }: NotesViewProps) {
                 {viewMode !== 'edit' ? (
                   <div className="scrollbar-subtle h-full overflow-y-auto px-6 py-5">
                     <div className="mx-auto max-w-3xl">
-                      {draft.content.trim() ? (
+                      {deferredPreviewContent.trim() ? (
                         <MarkdownPreview
-                          content={draft.content}
+                          content={deferredPreviewContent}
                           variant="document"
                           existingNoteTitles={titleLookup.titles}
                           onWikilinkClick={(target) =>

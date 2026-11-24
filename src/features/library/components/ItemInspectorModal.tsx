@@ -117,8 +117,8 @@ function InspectorBody({
   const [savedNotice, setSavedNotice] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const savedTimerRef = useRef<number | null>(null);
-  const isSample = item.file_path.startsWith('sample/');
-  const canReadLocally = isItemReadableLocally(item.file_path, item.file_format);
+  const hasLocalBookFile = isItemReadableLocally(item.file_path, item.file_format);
+  const canReadLocally = hasLocalBookFile;
   const isEpub = item.file_format === 'epub';
   const readingPercent =
     item.page_count > 0 && item.current_page > 0
@@ -280,7 +280,7 @@ function InspectorBody({
         </Button>
       </div>
 
-      {!isSample ? (
+      {hasLocalBookFile ? (
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             {canReadLocally ? (
