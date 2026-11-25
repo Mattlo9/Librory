@@ -214,11 +214,10 @@ pub async fn pick_importable_files(
             if reject_unsafe_os_path(&path_buf).is_ok()
                 && detect_supported_format(&path_buf).is_ok()
                 && ensure_not_symlink(&path_buf).is_ok()
+                && fs::canonicalize(&path_buf).is_ok()
             {
-                if let Ok(canonical) = fs::canonicalize(&path_buf) {
-                    resolved.push(canonical.to_string_lossy().to_string());
-                    approved_bufs.push(canonical);
-                }
+                resolved.push(path_buf.to_string_lossy().to_string());
+                approved_bufs.push(path_buf);
             }
         }
     }
@@ -374,6 +373,8 @@ mod tests {
         assert!(state.consume_if_approved(&file).is_err());
 
         state.approve_paths([file.clone()]);
+        // Must still pass `reject_unsafe_os_path` before consuming (Windows picker flow).
+        assert!(reject_unsafe_os_path(&file).is_ok());
         assert!(state.consume_if_approved(&file).is_ok());
         // Single-use consumption prevents replay
         assert!(state.consume_if_approved(&file).is_err());

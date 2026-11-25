@@ -278,8 +278,29 @@ pub async fn open_stored_book(
             return Err("El archivo almacenado no coincide con la firma de formato esperada.".to_string());
         }
 
+        let open_target = {
+            let raw = canonical.to_string_lossy();
+            #[cfg(windows)]
+            {
+                if let Some(stripped) = raw.strip_prefix(r"\\?\") {
+                    let b = stripped.as_bytes();
+                    if b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && b[2] == b'\\' {
+                        stripped.to_string()
+                    } else {
+                        raw.into_owned()
+                    }
+                } else {
+                    raw.into_owned()
+                }
+            }
+            #[cfg(not(windows))]
+            {
+                raw.into_owned()
+            }
+        };
+
         app.opener()
-            .open_path(canonical.to_string_lossy().as_ref(), None::<&str>)
+            .open_path(open_target.as_str(), None::<&str>)
             .map_err(|_| "No se pudo abrir el libro en la aplicación externa.".to_string())
     })
     .await

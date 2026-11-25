@@ -142,4 +142,16 @@ mod tests {
         assert!(!is_allowed_webview_url(&Url::parse("javascript:alert(1)").unwrap()));
         assert!(!is_allowed_webview_url(&Url::parse("data:text/html,<h1>hi</h1>").unwrap()));
     }
+
+    #[test]
+    fn tauri_security_config_preserves_pdf_viewer_compatibility() {
+        let conf: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).expect("valid tauri.conf.json");
+        let security = &conf["app"]["security"];
+        // `@embedpdf/viewer` bundles Preact, whose VNode cloning throws TypeError if Object.prototype is frozen.
+        assert_eq!(security["freezePrototype"], serde_json::Value::Bool(false));
+        let csp = security["csp"].as_str().expect("csp string");
+        assert!(csp.contains("worker-src 'self' blob:"));
+        assert!(csp.contains("'wasm-unsafe-eval'"));
+    }
 }
