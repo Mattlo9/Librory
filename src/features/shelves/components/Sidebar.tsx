@@ -1,6 +1,5 @@
 import {
   BarChart3,
-  BookOpen,
   ChevronDown,
   ChevronRight,
   Clock,
@@ -18,6 +17,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { memo, useCallback, useMemo, useState, type ReactNode } from 'react';
+import appIcon from '@/assets/app-icon.png';
 import {
   Collapsible,
   CollapsibleContent,
@@ -316,9 +316,13 @@ export const Sidebar = memo(function Sidebar({
                 onClick={handleSelectAll}
                 className="h-9 gap-2.5 px-2 hover:bg-sidebar-accent/60"
               >
-                <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-accent-brand/15 text-accent-brand ring-1 ring-accent-brand/25">
-                  <BookOpen className="size-3.5" />
-                </div>
+                <img
+                  src={appIcon}
+                  alt=""
+                  aria-hidden="true"
+                  draggable={false}
+                  className="size-6 shrink-0 select-none object-contain"
+                />
                 <span className="font-sans text-[15px] font-semibold tracking-tight text-foreground">
                   Librory
                 </span>
