@@ -1,6 +1,6 @@
 [package]
 name = "librory"
-version = "0.1.0"
+version = "0.1.1"
 description = "Biblioteca personal local-first para libros, papers, articulos y material de estudio"
 authors = ["Librory"]
 edition = "2021"
