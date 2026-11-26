@@ -4,9 +4,7 @@
 
 > Tus archivos, notas y estadísticas viven en tu propio equipo, sin cuentas obligatorias ni dependencia de la nube.
 
-<!-- Agrega aquí una captura de pantalla o GIF de la aplicación:
-![Vista principal de Librory](docs/screenshot.png)
--->
+![Vista principal de Librory](docs/screenshot.webp)
 
 ---
 
@@ -19,6 +17,16 @@
 - **Enfoque y estadísticas**: Incluye temporizador **Pomodoro**, registro de sesiones de estudio, mapa de calor de actividad y métricas de lectura.
 - **Privado y local-first**: Base de datos local en **SQLite** y archivos almacenados en el directorio de datos de la aplicación.
 - **Temas**: Interfaz adaptable con soporte de temas claro y oscuro.
+
+---
+
+## Estadísticas y seguimiento
+
+Sigue tu constancia diaria con el temporizador **Pomodoro**, el mapa de calor anual y las métricas de progreso de tu biblioteca:
+
+![Resumen de estudio y mapa de calor Pomodoro en Librory](docs/screenshot-stats-study.webp)
+
+![Métricas de lectura, libros en progreso y distribución en Librory](docs/screenshot-stats-reading.webp)
 
 ---
 
