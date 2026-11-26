@@ -36,7 +36,7 @@ import {
 import { SORT_OPTION_LABELS } from '@/lib/text';
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/store/uiStore';
-import type { SortOption, ViewMode } from '@/types/domain';
+import type { CoverFitMode, SortOption, ViewMode } from '@/types/domain';
 
 interface LibraryHeaderProps {
   segments: string[];
@@ -61,6 +61,10 @@ export const LibraryHeader = memo(function LibraryHeader({
   const goForward = useUiStore((s) => s.goForward);
   const coverSize = useUiStore((s) => s.coverSize);
   const setCoverSize = useUiStore((s) => s.setCoverSize);
+  const listCoverSize = useUiStore((s) => s.listCoverSize);
+  const setListCoverSize = useUiStore((s) => s.setListCoverSize);
+  const coverFit = useUiStore((s) => s.coverFit);
+  const setCoverFit = useUiStore((s) => s.setCoverFit);
   const viewMode = useUiStore((s) => s.viewMode);
   const setViewMode = useUiStore((s) => s.setViewMode);
   const sortBy = useUiStore((s) => s.sortBy);
@@ -74,7 +78,8 @@ export const LibraryHeader = memo(function LibraryHeader({
 
   const canGoBack = historyIndex > 0;
   const canGoForward = historyIndex < historyLength - 1;
-  const sliderDisabled = viewMode !== 'grid';
+  const isListMode = viewMode === 'list';
+  const activeCoverSize = isListMode ? listCoverSize : coverSize;
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border bg-background/90 px-5 backdrop-blur-sm">
@@ -136,24 +141,26 @@ export const LibraryHeader = memo(function LibraryHeader({
           <>
             <Tooltip>
               <TooltipTrigger asChild>
-                <div
-                  className={cn(
-                    'hidden items-center gap-2 rounded-md border border-border/70 bg-secondary/40 px-2.5 py-1 sm:flex',
-                    sliderDisabled && 'opacity-40',
-                  )}
-                >
+                <div className="hidden items-center gap-2 rounded-md border border-border/70 bg-secondary/40 px-2.5 py-1 sm:flex">
                   <BookMarked className="size-3 text-muted-foreground" />
                   <Slider
-                    aria-label="Tamaño de portadas"
-                    disabled={sliderDisabled}
-                    value={[coverSize]}
-                    min={110}
-                    max={240}
+                    aria-label={
+                      isListMode
+                        ? 'Tamaño de portadas en lista'
+                        : 'Tamaño de portadas en galería'
+                    }
+                    value={[activeCoverSize]}
+                    min={isListMode ? 36 : 110}
+                    max={isListMode ? 104 : 240}
                     step={4}
                     onValueChange={(values) => {
                       const next = values[0];
                       if (typeof next === 'number') {
-                        setCoverSize(next);
+                        if (isListMode) {
+                          setListCoverSize(next);
+                        } else {
+                          setCoverSize(next);
+                        }
                       }
                     }}
                     className="w-24 [&_[data-slot=slider-range]]:bg-accent-brand [&_[data-slot=slider-thumb]]:size-3 [&_[data-slot=slider-thumb]]:border-accent-brand"
@@ -162,14 +169,14 @@ export const LibraryHeader = memo(function LibraryHeader({
                     aria-hidden="true"
                     className="w-8 text-right font-mono text-[10.5px] tabular-nums text-muted-foreground"
                   >
-                    {coverSize}
+                    {activeCoverSize}
                   </span>
                 </div>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                {sliderDisabled
-                  ? 'Disponible en vista cuadrícula'
-                  : `Tamaño de portadas (${coverSize}px)`}
+                {isListMode
+                  ? `Tamaño de portadas en lista (${listCoverSize}px)`
+                  : `Tamaño de portadas en galería (${coverSize}px)`}
               </TooltipContent>
             </Tooltip>
 
@@ -222,6 +229,21 @@ export const LibraryHeader = memo(function LibraryHeader({
                 >
                   Agrupar por estanterías
                 </DropdownMenuCheckboxItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground">
+                  Ajuste de portadas
+                </DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={coverFit}
+                  onValueChange={(value) => setCoverFit(value as CoverFitMode)}
+                >
+                  <DropdownMenuRadioItem value="contain" className="text-xs">
+                    Completas (sin recortar)
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="cover" className="text-xs">
+                    Uniformes (rellenar)
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground">
                   Ordenar por

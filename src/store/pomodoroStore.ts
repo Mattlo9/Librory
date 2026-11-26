@@ -5,6 +5,12 @@ import type { CreateStudySessionInput, PomodoroPhase } from '@/types/domain';
 
 export type PomodoroStatus = 'idle' | 'running' | 'paused';
 
+export const POMODORO_PHASE_MAX_MINUTES: Record<PomodoroPhase, number> = {
+  focus: 240,
+  short_break: 60,
+  long_break: 90,
+};
+
 export interface PomodoroBookRef {
   id: string;
   title: string;
@@ -74,6 +80,7 @@ interface PomodoroState {
     shortBreakMinutes: number,
     longBreakMinutes: number,
   ) => void;
+  setCustomPhaseDuration: (totalSeconds: number) => void;
   updateSettings: (patch: PomodoroSettingsPatch) => void;
   dismissNotice: () => void;
 }
@@ -190,7 +197,11 @@ export const usePomodoroStore = create<PomodoroState>()(
           return;
         }
 
-        const plannedSeconds = getPhaseMinutes(state.phase, state) * 60;
+        const fallbackSeconds = getPhaseMinutes(state.phase, state) * 60;
+        const plannedSeconds =
+          Number.isFinite(state.plannedSeconds) && state.plannedSeconds >= 60
+            ? Math.round(state.plannedSeconds)
+            : fallbackSeconds;
         const effectiveBook = resolveEffectiveBook(state);
         const nowDate = new Date(nowMs);
 
@@ -530,19 +541,60 @@ export const usePomodoroStore = create<PomodoroState>()(
         });
       },
 
+      setCustomPhaseDuration: (totalSeconds) => {
+        const state = get();
+        if (state.status !== 'idle' || !Number.isFinite(totalSeconds)) {
+          return;
+        }
+        const maxMinutes = POMODORO_PHASE_MAX_MINUTES[state.phase];
+        const maxSeconds = maxMinutes * 60;
+        const safeSeconds = Math.min(
+          maxSeconds,
+          Math.max(60, Math.round(totalSeconds)),
+        );
+        const prefMinutes = clampMinutes(
+          Math.floor(safeSeconds / 60),
+          1,
+          maxMinutes,
+        );
+
+        const updates: Partial<PomodoroState> = {
+          plannedSeconds: safeSeconds,
+          remainingSeconds: safeSeconds,
+        };
+
+        if (state.phase === 'focus') {
+          updates.focusMinutes = prefMinutes;
+        } else if (state.phase === 'short_break') {
+          updates.shortBreakMinutes = prefMinutes;
+        } else {
+          updates.longBreakMinutes = prefMinutes;
+        }
+
+        set(updates);
+      },
+
       updateSettings: (patch) => {
         const state = get();
         const nextFocus =
           patch.focusMinutes !== undefined
-            ? clampMinutes(patch.focusMinutes, 1, 180)
+            ? clampMinutes(patch.focusMinutes, 1, POMODORO_PHASE_MAX_MINUTES.focus)
             : state.focusMinutes;
         const nextShort =
           patch.shortBreakMinutes !== undefined
-            ? clampMinutes(patch.shortBreakMinutes, 1, 60)
+            ? clampMinutes(
+                patch.shortBreakMinutes,
+                1,
+                POMODORO_PHASE_MAX_MINUTES.short_break,
+              )
             : state.shortBreakMinutes;
         const nextLong =
           patch.longBreakMinutes !== undefined
-            ? clampMinutes(patch.longBreakMinutes, 1, 90)
+            ? clampMinutes(
+                patch.longBreakMinutes,
+                1,
+                POMODORO_PHASE_MAX_MINUTES.long_break,
+              )
             : state.longBreakMinutes;
         const nextCycles =
           patch.cyclesBeforeLongBreak !== undefined
@@ -594,7 +646,7 @@ export const usePomodoroStore = create<PomodoroState>()(
         const raw = persistedState as Record<string, unknown>;
         const focusMinutes =
           typeof raw.focusMinutes === 'number'
-            ? clampMinutes(raw.focusMinutes, 1, 180)
+            ? clampMinutes(raw.focusMinutes, 1, POMODORO_PHASE_MAX_MINUTES.focus)
             : currentState.focusMinutes;
         const shortBreakMinutes =
           typeof raw.shortBreakMinutes === 'number'

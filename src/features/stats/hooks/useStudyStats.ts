@@ -3,10 +3,15 @@ import { libraryKeys } from '@/features/library/hooks/useLibraryData';
 import { isTauriRuntime } from '@/services/db';
 import {
   createStudySession,
+  getStudyEvolutionStats,
   getStudyOverviewStats,
   listPomodoroBookOptions,
 } from '@/services/studySessionRepository';
-import type { CreateStudySessionInput, StudyStatsRange } from '@/types/domain';
+import type {
+  CreateStudySessionInput,
+  StudyEvolutionGranularity,
+  StudyStatsRange,
+} from '@/types/domain';
 
 export function useStudyOverviewStats(
   range: StudyStatsRange,
@@ -16,6 +21,18 @@ export function useStudyOverviewStats(
   return useQuery({
     queryKey: libraryKeys.studyStats(range),
     queryFn: () => getStudyOverviewStats(range),
+    enabled: tauriActive && enabled,
+  });
+}
+
+export function useStudyEvolutionStats(
+  granularity: StudyEvolutionGranularity,
+  enabled: boolean,
+) {
+  const tauriActive = isTauriRuntime();
+  return useQuery({
+    queryKey: libraryKeys.studyEvolution(granularity),
+    queryFn: () => getStudyEvolutionStats(granularity),
     enabled: tauriActive && enabled,
   });
 }

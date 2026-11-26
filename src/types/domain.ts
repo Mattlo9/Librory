@@ -38,6 +38,57 @@ export type PomodoroPhase = (typeof POMODORO_PHASES)[number];
 
 export type StudyStatsRange = 'all' | '30d' | '7d';
 
+export type StudyEvolutionGranularity =
+  | 'day14'
+  | 'day30'
+  | 'week12'
+  | 'month12'
+  | 'year';
+
+export interface StudyEvolutionBucket {
+  key: string;
+  label: string;
+  fullLabel: string;
+  focusSeconds: number;
+  cumulativeSeconds: number;
+  sessions: number;
+  isCurrentPeriod: boolean;
+}
+
+export interface StudyEvolutionBookBreakdown {
+  itemId: string | null;
+  title: string;
+  author: string;
+  focusSeconds: number;
+  sessions: number;
+  sharePercent: number;
+}
+
+export interface StudyPeriodSummary {
+  currentSeconds: number;
+  previousSeconds: number;
+  currentSessions: number;
+  deltaPercent: number | null;
+}
+
+export interface StudyEvolutionStats {
+  granularity: StudyEvolutionGranularity;
+  buckets: StudyEvolutionBucket[];
+  periodTotalSeconds: number;
+  periodSessions: number;
+  averageBucketSeconds: number;
+  averageActiveBucketSeconds: number;
+  bestBucket: StudyEvolutionBucket | null;
+  summaries: {
+    today: StudyPeriodSummary;
+    thisWeek: StudyPeriodSummary;
+    thisMonth: StudyPeriodSummary;
+    allTimeSeconds: number;
+    allTimeSessions: number;
+  };
+  bookBreakdown: StudyEvolutionBookBreakdown[];
+}
+
 export type NavigationSection =
   | 'inbox'
   | 'all'
@@ -50,6 +101,8 @@ export type NavigationSection =
   | { kind: 'tag'; tagId: string };
 
 export type ViewMode = 'grid' | 'list';
+
+export type CoverFitMode = 'contain' | 'cover';
 
 export type SortOption = 'created_desc' | 'title_asc' | 'author_asc';
 

@@ -5,6 +5,7 @@ import {
   Code,
   Columns2,
   Copy,
+  CopyPlus,
   Download,
   Eye,
   FileDown,
@@ -37,6 +38,13 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -153,6 +161,7 @@ export function NotesView({ onOpenItem, onOpenReader }: NotesViewProps) {
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
   const dirtyRef = useRef<{ id: string; patch: UpdateNoteInput } | null>(null);
   const autosaveTimerRef = useRef<number | null>(null);
   const feedbackTimerRef = useRef<number | null>(null);
@@ -504,58 +513,142 @@ export function NotesView({ onOpenItem, onOpenReader }: NotesViewProps) {
     [draft, scheduleDraftPatch],
   );
 
-  const buildMergedNote = useCallback((): NoteWithItem | null => {
-    if (!selectedNote || !draft || draft.id !== selectedNote.id) {
-      return selectedNote;
-    }
-    const matchedBook = draft.itemId
-      ? bookOptions.find((b) => b.id === draft.itemId)
-      : null;
-
-    return {
-      ...selectedNote,
-      title: draft.title.trim() || 'Nota sin título',
-      content: draft.content,
-      folder: draft.folder.trim(),
-      tags: draft.tags,
-      item_id: draft.itemId,
-      item_title:
-        draft.itemId === selectedNote.item_id
-          ? selectedNote.item_title
-          : (matchedBook?.title ?? null),
-      item_author:
-        draft.itemId === selectedNote.item_id
-          ? selectedNote.item_author
-          : (matchedBook?.author ?? null),
-    };
-  }, [selectedNote, draft, bookOptions]);
-
-  const handleExportSingle = useCallback(async () => {
-    await flushPendingSave();
-    const noteToExport = buildMergedNote();
-    if (!noteToExport) return;
-    try {
-      const path = await exportSingleNoteToFile(noteToExport);
-      if (path) {
-        showFeedback('Nota exportada en formato Markdown.');
+  const resolveNoteSnapshot = useCallback(
+    (note: NoteWithItem): NoteWithItem => {
+      if (!draft || draft.id !== note.id) {
+        return note;
       }
-    } catch (error) {
-      showFeedback(
-        error instanceof Error ? error.message : 'No se pudo exportar la nota.',
-      );
-    }
-  }, [flushPendingSave, buildMergedNote, showFeedback]);
+      const matchedBook = draft.itemId
+        ? bookOptions.find((b) => b.id === draft.itemId)
+        : null;
 
-  const handleCopyMarkdown = useCallback(async () => {
-    const noteToCopy = buildMergedNote();
-    if (!noteToCopy) return;
-    try {
-      await navigator.clipboard.writeText(buildObsidianMarkdown(noteToCopy));
-      showFeedback('Markdown con frontmatter copiado al portapapeles.');
-    } catch {
-      showFeedback('No se pudo copiar al portapapeles.');
-    }
-  }, [buildMergedNote, showFeedback]);
+      return {
+        ...note,
+        title: draft.title.trim() || 'Nota sin título',
+        content: draft.content,
+        folder: draft.folder.trim(),
+        tags: draft.tags,
+        item_id: draft.itemId,
+        item_title:
+          draft.itemId === note.item_id
+            ? note.item_title
+            : (matchedBook?.title ?? null),
+        item_author:
+          draft.itemId === note.item_id
+            ? note.item_author
+            : (matchedBook?.author ?? null),
+      };
+    },
+    [draft, bookOptions],
+  );
+
+  const handleExportSingle = useCallback(
+    async (targetNote?: NoteWithItem) => {
+      const target = targetNote ?? selectedNote;
+      if (!target) return;
+      if (!targetNote || target.id === selectedNoteId) {
+        await flushPendingSave();
+      }
+      const noteToExport = resolveNoteSnapshot(target);
+      try {
+        const path = await exportSingleNoteToFile(noteToExport);
+        if (path) {
+          showFeedback('Nota exportada en formato Markdown.');
+        }
+      } catch (error) {
+        showFeedback(
+          error instanceof Error ? error.message : 'No se pudo exportar la nota.',
+        );
+      }
+    },
+    [
+      selectedNote,
+      selectedNoteId,
+      flushPendingSave,
+      resolveNoteSnapshot,
+      showFeedback,
+    ],
+  );
+
+  const handleCopyMarkdown = useCallback(
+    async (targetNote?: NoteWithItem) => {
+      const target = targetNote ?? selectedNote;
+      if (!target) return;
+      const noteToCopy = resolveNoteSnapshot(target);
+      try {
+        await navigator.clipboard.writeText(buildObsidianMarkdown(noteToCopy));
+        showFeedback('Markdown con frontmatter copiado al portapapeles.');
+      } catch {
+        showFeedback('No se pudo copiar al portapapeles.');
+      }
+    },
+    [selectedNote, resolveNoteSnapshot, showFeedback],
+  );
+
+  const handleTogglePinNote = useCallback(
+    async (note: NoteWithItem) => {
+      const nextPinned = note.is_pinned !== 1;
+      try {
+        await updateNoteMutation.mutateAsync({
+          id: note.id,
+          patch: { is_pinned: nextPinned },
+        });
+        showFeedback(nextPinned ? 'Nota fijada.' : 'Nota desfijada.');
+      } catch (error) {
+        showFeedback(
+          error instanceof Error
+            ? error.message
+            : 'No se pudo actualizar la nota.',
+        );
+      }
+    },
+    [updateNoteMutation, showFeedback],
+  );
+
+  const handleDuplicateNote = useCallback(
+    async (note: NoteWithItem) => {
+      if (note.id === selectedNoteId) {
+        await flushPendingSave();
+      }
+      const snap = resolveNoteSnapshot(note);
+      try {
+        const created = await createNoteMutation.mutateAsync({
+          title: `${snap.title} (copia)`,
+          content: snap.content,
+          folder: snap.folder,
+          tags: snap.tags,
+          item_id: snap.item_id,
+          is_pinned: false,
+        });
+        setSelectedNoteId(created.id);
+        showFeedback('Nota duplicada.');
+      } catch (error) {
+        showFeedback(
+          error instanceof Error
+            ? error.message
+            : 'No se pudo duplicar la nota.',
+        );
+      }
+    },
+    [
+      selectedNoteId,
+      flushPendingSave,
+      resolveNoteSnapshot,
+      createNoteMutation,
+      showFeedback,
+    ],
+  );
+
+  const handleRenameNote = useCallback(
+    (note: NoteWithItem) => {
+      selectNote(note.id);
+      window.setTimeout(() => {
+        titleInputRef.current?.focus();
+        titleInputRef.current?.select();
+      }, 40);
+    },
+    [selectNote],
+  );
 
   const handleExportVault = useCallback(async () => {
     await flushPendingSave();
@@ -769,54 +862,135 @@ export function NotesView({ onOpenItem, onOpenReader }: NotesViewProps) {
                 isSelected && draft ? draft.content : note.content;
               const displayFolder =
                 isSelected && draft ? draft.folder : note.folder;
+              const linkedBookId = isSelected && draft ? draft.itemId : note.item_id;
 
               return (
-                <button
-                  key={note.id}
-                  type="button"
-                  onClick={() => selectNote(note.id)}
-                  className={cn(
-                    'w-full rounded-lg border px-3 py-2.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
-                    isSelected
-                      ? 'border-accent-brand/40 bg-accent-brand/10'
-                      : 'border-transparent hover:bg-secondary/60',
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="truncate text-xs font-semibold text-foreground">
-                      {displayTitle}
-                    </p>
-                    <div className="flex shrink-0 items-center gap-1">
-                      {note.is_pinned === 1 ? (
-                        <Pin className="size-3 text-accent-brand" />
+                <ContextMenu key={note.id}>
+                  <ContextMenuTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => selectNote(note.id)}
+                      className={cn(
+                        'w-full rounded-lg border px-3 py-2.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+                        isSelected
+                          ? 'border-accent-brand/40 bg-accent-brand/10'
+                          : 'border-transparent hover:bg-secondary/60',
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="truncate text-xs font-semibold text-foreground">
+                          {displayTitle}
+                        </p>
+                        <div className="flex shrink-0 items-center gap-1">
+                          {note.is_pinned === 1 ? (
+                            <Pin className="size-3 text-accent-brand" />
+                          ) : null}
+                          <span className="font-mono text-[10px] text-muted-foreground">
+                            {formatShortDate(note.updated_at)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <p className="mt-1 line-clamp-1 text-[11px] text-muted-foreground">
+                        {buildSnippet(displayContent)}
+                      </p>
+
+                      {displayFolder || note.item_title ? (
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          {displayFolder ? (
+                            <span className="inline-flex max-w-[120px] items-center gap-1 truncate rounded bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                              <Folder className="size-2.5 shrink-0" />
+                              <span className="truncate">{displayFolder}</span>
+                            </span>
+                          ) : null}
+                          {note.item_title ? (
+                            <span className="inline-flex max-w-[130px] items-center gap-1 truncate rounded bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                              <BookOpen className="size-2.5 shrink-0" />
+                              <span className="truncate">{note.item_title}</span>
+                            </span>
+                          ) : null}
+                        </div>
                       ) : null}
-                      <span className="font-mono text-[10px] text-muted-foreground">
-                        {formatShortDate(note.updated_at)}
+                    </button>
+                  </ContextMenuTrigger>
+
+                  <ContextMenuContent
+                    className="w-56"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <ContextMenuItem
+                      className="text-xs"
+                      onSelect={() => void handleTogglePinNote(note)}
+                    >
+                      <Pin className="size-3.5" />
+                      <span>
+                        {note.is_pinned === 1 ? 'Desfijar nota' : 'Fijar nota'}
                       </span>
-                    </div>
-                  </div>
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      className="text-xs"
+                      onSelect={() => handleRenameNote(note)}
+                    >
+                      <Pencil className="size-3.5" />
+                      <span>Renombrar</span>
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      className="text-xs"
+                      onSelect={() => void handleDuplicateNote(note)}
+                    >
+                      <CopyPlus className="size-3.5" />
+                      <span>Duplicar</span>
+                    </ContextMenuItem>
 
-                  <p className="mt-1 line-clamp-1 text-[11px] text-muted-foreground">
-                    {buildSnippet(displayContent)}
-                  </p>
+                    <ContextMenuSeparator />
 
-                  {displayFolder || note.item_title ? (
-                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                      {displayFolder ? (
-                        <span className="inline-flex max-w-[120px] items-center gap-1 truncate rounded bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                          <Folder className="size-2.5 shrink-0" />
-                          <span className="truncate">{displayFolder}</span>
-                        </span>
-                      ) : null}
-                      {note.item_title ? (
-                        <span className="inline-flex max-w-[130px] items-center gap-1 truncate rounded bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                          <BookOpen className="size-2.5 shrink-0" />
-                          <span className="truncate">{note.item_title}</span>
-                        </span>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </button>
+                    <ContextMenuItem
+                      className="text-xs"
+                      onSelect={() => void handleExportSingle(note)}
+                    >
+                      <FileDown className="size-3.5" />
+                      <span>Exportar nota (.md)</span>
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      className="text-xs"
+                      onSelect={() => void handleCopyMarkdown(note)}
+                    >
+                      <Copy className="size-3.5" />
+                      <span>Copiar Markdown (Obsidian)</span>
+                    </ContextMenuItem>
+
+                    {linkedBookId ? (
+                      <>
+                        <ContextMenuSeparator />
+                        <ContextMenuItem
+                          className="text-xs"
+                          onSelect={() => onOpenReader(linkedBookId)}
+                        >
+                          <BookOpen className="size-3.5" />
+                          <span>Leer libro vinculado</span>
+                        </ContextMenuItem>
+                        <ContextMenuItem
+                          className="text-xs"
+                          onSelect={() => onOpenItem(linkedBookId)}
+                        >
+                          <Eye className="size-3.5" />
+                          <span>Ver ficha del libro</span>
+                        </ContextMenuItem>
+                      </>
+                    ) : null}
+
+                    <ContextMenuSeparator />
+
+                    <ContextMenuItem
+                      variant="destructive"
+                      className="text-xs"
+                      onSelect={() => setNotePendingDelete(note)}
+                    >
+                      <Trash2 className="size-3.5" />
+                      <span>Eliminar</span>
+                    </ContextMenuItem>
+                  </ContextMenuContent>
+                </ContextMenu>
               );
             })
           )}
@@ -921,12 +1095,7 @@ export function NotesView({ onOpenItem, onOpenReader }: NotesViewProps) {
                       : 'Fijar nota arriba'
                   }
                   aria-label="Fijar nota"
-                  onClick={() =>
-                    void updateNoteMutation.mutateAsync({
-                      id: selectedNote.id,
-                      patch: { is_pinned: selectedNote.is_pinned !== 1 },
-                    })
-                  }
+                  onClick={() => void handleTogglePinNote(selectedNote)}
                 >
                   <Pin
                     className={cn(
@@ -1072,6 +1241,7 @@ export function NotesView({ onOpenItem, onOpenReader }: NotesViewProps) {
             {/* Properties header (Obsidian frontmatter fields) */}
             <div className="shrink-0 space-y-2.5 border-b border-border/60 px-6 py-3.5">
               <input
+                ref={titleInputRef}
                 type="text"
                 value={draft.title}
                 onChange={(e) => scheduleDraftPatch({ title: e.target.value })}
@@ -1392,10 +1562,10 @@ export function NotesView({ onOpenItem, onOpenReader }: NotesViewProps) {
           const deleteId = notePendingDelete.id;
           if (dirtyRef.current?.id === deleteId) {
             dirtyRef.current = null;
-          }
-          if (autosaveTimerRef.current !== null) {
-            window.clearTimeout(autosaveTimerRef.current);
-            autosaveTimerRef.current = null;
+            if (autosaveTimerRef.current !== null) {
+              window.clearTimeout(autosaveTimerRef.current);
+              autosaveTimerRef.current = null;
+            }
           }
           await deleteNoteMutation.mutateAsync(deleteId);
           setNotePendingDelete(null);

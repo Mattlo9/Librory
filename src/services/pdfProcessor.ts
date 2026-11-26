@@ -1,13 +1,16 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-import { canvasToWebpBytes, COVER_TARGET_WIDTH } from '@/lib/imageEncoding';
+import {
+  canvasToWebpBytes,
+  COVER_MAX_HEIGHT,
+  COVER_TARGET_WIDTH,
+} from '@/lib/imageEncoding';
 import { cleanMetadataString } from '@/lib/validation';
 import type { ExtractedDocumentMeta } from '@/types/domain';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 const MAX_PDF_IMAGE_PIXELS = 16_777_216; // 16 megapixels per embedded PDF image
-const MAX_COVER_HEIGHT = 960;
 const PDF_COVER_RENDER_TIMEOUT_MS = 10_000;
 
 function cleanPdfMetaString(
@@ -122,14 +125,26 @@ export async function extractPdfMetadataAndCover(
       ) {
         // Strictly cap both width and height (no lower scale floor that allows huge MediaBox OOMs).
         const scale = Math.min(
-          2,
+          2.5,
           COVER_TARGET_WIDTH / baseViewport.width,
-          MAX_COVER_HEIGHT / baseViewport.height,
+          COVER_MAX_HEIGHT / baseViewport.height,
         );
         if (scale > 0) {
           const viewport = page.getViewport({ scale });
-          canvas.width = Math.max(1, Math.min(COVER_TARGET_WIDTH, Math.round(viewport.width)));
-          canvas.height = Math.max(1, Math.min(MAX_COVER_HEIGHT, Math.round(viewport.height)));
+          canvas.width = Math.max(
+            1,
+            Math.min(COVER_TARGET_WIDTH, Math.round(viewport.width)),
+          );
+          canvas.height = Math.max(
+            1,
+            Math.min(COVER_MAX_HEIGHT, Math.round(viewport.height)),
+          );
+
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          }
 
           const renderTask = page.render({ canvas, viewport });
           let timeoutId: number | null = null;

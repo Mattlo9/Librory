@@ -1,5 +1,5 @@
 import { Check, Star } from 'lucide-react';
-import { memo, useMemo, type MouseEvent } from 'react';
+import { memo, useEffect, useMemo, useRef, type CSSProperties, type MouseEvent } from 'react';
 import { Badge } from '@/components/ui/badge';
 import {
   ContextMenu,
@@ -15,7 +15,9 @@ import { useAssetUrl } from '@/features/library/hooks/useAssetUrl';
 import { isItemReadableLocally } from '@/lib/highlights';
 import { ITEM_STATUS_LABELS, ITEM_TYPE_SINGULAR } from '@/lib/text';
 import { cn } from '@/lib/utils';
+import { useUiStore } from '@/store/uiStore';
 import type {
+  CoverFitMode,
   LibraryItemWithRelations,
   ShelfWithCount,
   TagWithCount,
@@ -35,6 +37,8 @@ interface BookListRowProps {
   shelfNameById: Map<string, string>;
   tagNameById: Map<string, string>;
   actions: BookItemActions;
+  coverFit: CoverFitMode;
+  compactCover: boolean;
   selected: boolean;
   selectionActive: boolean;
 }
@@ -55,11 +59,15 @@ function takeResolvedNames(
   return result;
 }
 
+const SINGLE_CLICK_DELAY_MS = 220;
+
 const BookListRow = memo(function BookListRow({
   item,
   shelfNameById,
   tagNameById,
   actions,
+  coverFit,
+  compactCover,
   selected,
   selectionActive,
 }: BookListRowProps) {
@@ -73,17 +81,61 @@ const BookListRow = memo(function BookListRow({
     item.page_count > 0 && item.current_page > 0
       ? Math.min(100, Math.round((item.current_page / item.page_count) * 100))
       : 0;
+  const clickTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (clickTimerRef.current !== null) {
+        window.clearTimeout(clickTimerRef.current);
+        clickTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const clearPendingClick = () => {
+    if (clickTimerRef.current !== null) {
+      window.clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+  };
 
   const handleRowClick = (event: MouseEvent) => {
     if (
       (selectionActive || event.ctrlKey || event.metaKey || event.shiftKey) &&
       actions.onToggleSelect
     ) {
+      clearPendingClick();
       event.preventDefault();
       actions.onToggleSelect(item.id, event.shiftKey);
       return;
     }
-    actions.onSelect(item.id);
+
+    if (event.detail === 0) {
+      clearPendingClick();
+      actions.onSelect(item.id);
+      return;
+    }
+
+    if (event.detail >= 2) {
+      clearPendingClick();
+      return;
+    }
+
+    clearPendingClick();
+    clickTimerRef.current = window.setTimeout(() => {
+      clickTimerRef.current = null;
+      actions.onSelect(item.id);
+    }, SINGLE_CLICK_DELAY_MS);
+  };
+
+  const handleDoubleClick = () => {
+    clearPendingClick();
+    if (selectionActive) return;
+    if (canReadLocally && actions.onOpenReader) {
+      actions.onOpenReader(item.id);
+    } else {
+      actions.onSelect(item.id);
+    }
   };
 
   return (
@@ -91,7 +143,7 @@ const BookListRow = memo(function BookListRow({
       <ContextMenuTrigger asChild>
         <div
           className={cn(
-            'group grid w-full grid-cols-[24px_40px_minmax(0,2fr)_minmax(0,1.3fr)_120px_100px_110px_64px] items-center gap-4 rounded-lg px-3 py-2.5 text-left transition-colors [content-visibility:auto] [contain-intrinsic-size:64px]',
+            'group grid w-full grid-cols-[24px_var(--list-cover-w,56px)_minmax(0,2fr)_minmax(0,1.3fr)_120px_100px_110px_64px] items-center gap-4 rounded-lg px-3 py-2.5 text-left transition-colors [content-visibility:auto] [contain-intrinsic-size:auto_var(--list-row-h,96px)]',
             selected
               ? 'bg-accent-brand/10 ring-1 ring-inset ring-accent-brand/40 hover:bg-accent-brand/15'
               : 'hover:bg-secondary/70 focus-within:bg-secondary/70',
@@ -128,11 +180,7 @@ const BookListRow = memo(function BookListRow({
           <button
             type="button"
             onClick={handleRowClick}
-            onDoubleClick={
-              !selectionActive && canReadLocally && actions.onOpenReader
-                ? () => actions.onOpenReader?.(item.id)
-                : undefined
-            }
+            onDoubleClick={selectionActive ? undefined : handleDoubleClick}
             title={
               selectionActive
                 ? 'Clic para seleccionar · Shift+Clic para rango'
@@ -142,7 +190,7 @@ const BookListRow = memo(function BookListRow({
             }
             className="col-span-6 grid grid-cols-subgrid items-center gap-4 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <div className="w-10 shrink-0">
+            <div className="flex w-full shrink-0 items-center justify-center">
               <CoverImage
                 id={item.id}
                 title={item.title}
@@ -150,7 +198,9 @@ const BookListRow = memo(function BookListRow({
                 type={item.type}
                 fileFormat={item.file_format}
                 assetUrl={assetUrl}
-                compact
+                fit={coverFit}
+                maxHeight="calc(var(--list-cover-w, 56px) * 1.5)"
+                compact={compactCover}
               />
             </div>
 
@@ -247,6 +297,10 @@ export function BookListView({
   selectedIdsSet,
   selectionActive,
 }: BookListViewProps) {
+  const listCoverSize = useUiStore((s) => s.listCoverSize);
+  const coverFit = useUiStore((s) => s.coverFit);
+  const compactCover = listCoverSize < 64;
+
   const shelfNameById = useMemo(
     () => new Map(shelves.map((shelf) => [shelf.id, shelf.name])),
     [shelves],
@@ -256,9 +310,18 @@ export function BookListView({
     [tags],
   );
 
+  const listStyle = useMemo(
+    () =>
+      ({
+        '--list-cover-w': `${listCoverSize}px`,
+        '--list-row-h': `${Math.round(listCoverSize * 1.5 + 22)}px`,
+      }) as CSSProperties,
+    [listCoverSize],
+  );
+
   return (
-    <div className="px-6 py-4">
-      <div className="mb-1 grid grid-cols-[24px_40px_minmax(0,2fr)_minmax(0,1.3fr)_120px_100px_110px_64px] gap-4 border-b border-border px-3 pb-2 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+    <div className="px-6 py-4" style={listStyle}>
+      <div className="mb-1 grid grid-cols-[24px_var(--list-cover-w,56px)_minmax(0,2fr)_minmax(0,1.3fr)_120px_100px_110px_64px] gap-4 border-b border-border px-3 pb-2 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
         <span />
         <span />
         <span>Título y autor</span>
@@ -277,6 +340,8 @@ export function BookListView({
             shelfNameById={shelfNameById}
             tagNameById={tagNameById}
             actions={bookActions}
+            coverFit={coverFit}
+            compactCover={compactCover}
             selected={selectedIdsSet.has(item.id)}
             selectionActive={selectionActive}
           />

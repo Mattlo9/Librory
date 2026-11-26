@@ -14,6 +14,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAssetUrl } from '@/features/library/hooks/useAssetUrl';
 import { ActivityChartCard } from '@/features/stats/components/ActivityChartCard';
+import { StudyEvolutionCard } from '@/features/stats/components/StudyEvolutionCard';
 import { StudyOverviewCard } from '@/features/stats/components/StudyOverviewCard';
 import { useReadingStats } from '@/features/stats/hooks/useReadingStats';
 import { isItemReadableLocally } from '@/lib/highlights';
@@ -48,6 +49,7 @@ const STATS_LOADING_SKELETON = (
     className="mx-auto max-w-6xl space-y-6 px-6 py-6"
   >
     <Skeleton className="h-72 rounded-xl" />
+    <Skeleton className="h-80 rounded-xl" />
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       {Array.from({ length: 4 }, (_, idx) => (
         <Skeleton key={idx} className="h-28 rounded-xl" />
@@ -197,6 +199,7 @@ export function StatsView({
     return (
       <div className="mx-auto max-w-6xl space-y-6 px-6 py-6">
         <StudyOverviewCard onOpenItem={onOpenItem} />
+        <StudyEvolutionCard onOpenItem={onOpenItem} />
         <ActivityChartCard />
         <div className="py-8">
           <EmptyState
@@ -228,6 +231,9 @@ export function StatsView({
     <div className="mx-auto max-w-6xl space-y-6 px-6 py-6">
       {/* 0. Resumen de estudio Pomodoro y mapa de calor */}
       <StudyOverviewCard onOpenItem={onOpenItem} />
+
+      {/* 0b. Tiempo acumulado y evolución temporal del Pomodoro */}
+      <StudyEvolutionCard onOpenItem={onOpenItem} />
 
       {/* 1. Tarjetas KPI */}
       <section

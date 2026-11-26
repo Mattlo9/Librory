@@ -2,16 +2,38 @@ import { invokeDb } from '@/services/db';
 import type {
   CreateStudySessionInput,
   PomodoroBookOption,
+  StudyEvolutionBookBreakdown,
+  StudyEvolutionBucket,
+  StudyEvolutionGranularity,
+  StudyEvolutionStats,
   StudyHeatmapDay,
   StudyOverviewStats,
   StudySession,
   StudyStatsRange,
 } from '@/types/domain';
 
-interface StudySessionWithItemRow extends StudySession {
+export interface StudySessionWithItemRow extends StudySession {
   item_title: string | null;
   item_author: string | null;
 }
+
+const SHORT_DAY_MONTH_FMT = new Intl.DateTimeFormat('es', {
+  day: 'numeric',
+  month: 'short',
+});
+const FULL_DAY_FMT = new Intl.DateTimeFormat('es', {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
+const SHORT_MONTH_FMT = new Intl.DateTimeFormat('es', {
+  month: 'short',
+});
+const FULL_MONTH_FMT = new Intl.DateTimeFormat('es', {
+  month: 'long',
+  year: 'numeric',
+});
 
 const ISO_DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -330,4 +352,408 @@ export async function getStudyOverviewStats(
     todaySessions: todayBucket?.sessions ?? 0,
     rangeStartDate,
   };
+}
+
+function sanitizeDurationSeconds(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
+}
+
+function cleanFormattedDate(fmt: Intl.DateTimeFormat, date: Date): string {
+  return fmt.format(date).replace(/\./g, '').trim();
+}
+
+function capitalizeFirst(text: string): string {
+  if (!text) return text;
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function computeDeltaPercent(current: number, previous: number): number | null {
+  if (previous <= 0) return null;
+  return Math.round(((current - previous) / previous) * 100);
+}
+
+function getMondayOfDate(date: Date): Date {
+  const mondayOffset = (date.getDay() + 6) % 7;
+  return addLocalDays(date, -mondayOffset);
+}
+
+/**
+ * Computes Pomodoro accumulated totals, period comparisons, chronological evolution buckets,
+ * and per-book time breakdown from focus sessions.
+ */
+export function computeStudyEvolutionStats(
+  rows: StudySessionWithItemRow[],
+  granularity: StudyEvolutionGranularity,
+  referenceDate: Date = new Date(),
+): StudyEvolutionStats {
+  const today = new Date(
+    referenceDate.getFullYear(),
+    referenceDate.getMonth(),
+    referenceDate.getDate(),
+    12,
+    0,
+    0,
+    0,
+  );
+  const todayKey = formatLocalDateKey(today);
+  const yesterdayKey = formatLocalDateKey(addLocalDays(today, -1));
+
+  const validRows = rows.filter((row) => parseLocalDateKey(row.local_date) !== null);
+
+  const dailyMap = new Map<string, { sessions: number; focusSeconds: number }>();
+  let allTimeSeconds = 0;
+  let allTimeSessions = 0;
+
+  for (const row of validRows) {
+    const duration = sanitizeDurationSeconds(row.duration_seconds);
+    allTimeSeconds += duration;
+    allTimeSessions += 1;
+
+    const prev = dailyMap.get(row.local_date) ?? { sessions: 0, focusSeconds: 0 };
+    dailyMap.set(row.local_date, {
+      sessions: prev.sessions + 1,
+      focusSeconds: prev.focusSeconds + duration,
+    });
+  }
+
+  // Summary periods: today vs yesterday, this week vs last week, this month vs last month
+  const currentWeekStart = getMondayOfDate(today);
+  const currentWeekStartKey = formatLocalDateKey(currentWeekStart);
+  const prevWeekStartKey = formatLocalDateKey(addLocalDays(currentWeekStart, -7));
+  const prevWeekEndKey = formatLocalDateKey(addLocalDays(currentWeekStart, -1));
+
+  const currentMonthStart = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    1,
+    12,
+    0,
+    0,
+    0,
+  );
+  const prevMonthStart = new Date(
+    today.getFullYear(),
+    today.getMonth() - 1,
+    1,
+    12,
+    0,
+    0,
+    0,
+  );
+  const prevMonthEnd = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    0,
+    12,
+    0,
+    0,
+    0,
+  );
+  const currentMonthStartKey = formatLocalDateKey(currentMonthStart);
+  const prevMonthStartKey = formatLocalDateKey(prevMonthStart);
+  const prevMonthEndKey = formatLocalDateKey(prevMonthEnd);
+
+  let thisWeekSeconds = 0;
+  let thisWeekSessions = 0;
+  let prevWeekSeconds = 0;
+  let thisMonthSeconds = 0;
+  let thisMonthSessions = 0;
+  let prevMonthSeconds = 0;
+
+  for (const row of validRows) {
+    const duration = sanitizeDurationSeconds(row.duration_seconds);
+    const key = row.local_date;
+    if (key >= currentWeekStartKey && key <= todayKey) {
+      thisWeekSeconds += duration;
+      thisWeekSessions += 1;
+    } else if (key >= prevWeekStartKey && key <= prevWeekEndKey) {
+      prevWeekSeconds += duration;
+    }
+
+    if (key >= currentMonthStartKey && key <= todayKey) {
+      thisMonthSeconds += duration;
+      thisMonthSessions += 1;
+    } else if (key >= prevMonthStartKey && key <= prevMonthEndKey) {
+      prevMonthSeconds += duration;
+    }
+  }
+
+  const todayBucket = dailyMap.get(todayKey);
+  const yesterdayBucket = dailyMap.get(yesterdayKey);
+  const todaySeconds = todayBucket?.focusSeconds ?? 0;
+  const yesterdaySeconds = yesterdayBucket?.focusSeconds ?? 0;
+
+  const summaries: StudyEvolutionStats['summaries'] = {
+    today: {
+      currentSeconds: todaySeconds,
+      previousSeconds: yesterdaySeconds,
+      currentSessions: todayBucket?.sessions ?? 0,
+      deltaPercent: computeDeltaPercent(todaySeconds, yesterdaySeconds),
+    },
+    thisWeek: {
+      currentSeconds: thisWeekSeconds,
+      previousSeconds: prevWeekSeconds,
+      currentSessions: thisWeekSessions,
+      deltaPercent: computeDeltaPercent(thisWeekSeconds, prevWeekSeconds),
+    },
+    thisMonth: {
+      currentSeconds: thisMonthSeconds,
+      previousSeconds: prevMonthSeconds,
+      currentSessions: thisMonthSessions,
+      deltaPercent: computeDeltaPercent(thisMonthSeconds, prevMonthSeconds),
+    },
+    allTimeSeconds,
+    allTimeSessions,
+  };
+
+  // Chronological buckets
+  const buckets: StudyEvolutionBucket[] = [];
+  let periodStartKey = todayKey;
+
+  if (granularity === 'day14' || granularity === 'day30') {
+    const count = granularity === 'day14' ? 14 : 30;
+    const start = addLocalDays(today, -(count - 1));
+    periodStartKey = formatLocalDateKey(start);
+
+    for (let i = 0; i < count; i += 1) {
+      const d = addLocalDays(start, i);
+      const key = formatLocalDateKey(d);
+      const bucket = dailyMap.get(key);
+      buckets.push({
+        key,
+        label: cleanFormattedDate(SHORT_DAY_MONTH_FMT, d),
+        fullLabel: capitalizeFirst(cleanFormattedDate(FULL_DAY_FMT, d)),
+        focusSeconds: bucket?.focusSeconds ?? 0,
+        cumulativeSeconds: 0,
+        sessions: bucket?.sessions ?? 0,
+        isCurrentPeriod: key === todayKey,
+      });
+    }
+  } else if (granularity === 'week12') {
+    const firstMonday = addLocalDays(currentWeekStart, -11 * 7);
+    periodStartKey = formatLocalDateKey(firstMonday);
+
+    const weekMap = new Map<string, { sessions: number; focusSeconds: number }>();
+    for (const row of validRows) {
+      if (row.local_date > todayKey) continue;
+      const d = parseLocalDateKey(row.local_date);
+      if (!d) continue;
+      const mondayKey = formatLocalDateKey(getMondayOfDate(d));
+      const prev = weekMap.get(mondayKey) ?? { sessions: 0, focusSeconds: 0 };
+      weekMap.set(mondayKey, {
+        sessions: prev.sessions + 1,
+        focusSeconds: prev.focusSeconds + sanitizeDurationSeconds(row.duration_seconds),
+      });
+    }
+
+    for (let w = 0; w < 12; w += 1) {
+      const start = addLocalDays(firstMonday, w * 7);
+      const end = addLocalDays(start, 6);
+      const key = formatLocalDateKey(start);
+      const bucket = weekMap.get(key);
+      buckets.push({
+        key,
+        label: cleanFormattedDate(SHORT_DAY_MONTH_FMT, start),
+        fullLabel: `Sem. ${cleanFormattedDate(SHORT_DAY_MONTH_FMT, start)} – ${cleanFormattedDate(SHORT_DAY_MONTH_FMT, end)}`,
+        focusSeconds: bucket?.focusSeconds ?? 0,
+        cumulativeSeconds: 0,
+        sessions: bucket?.sessions ?? 0,
+        isCurrentPeriod: w === 11,
+      });
+    }
+  } else if (granularity === 'month12') {
+    const firstMonth = new Date(
+      today.getFullYear(),
+      today.getMonth() - 11,
+      1,
+      12,
+      0,
+      0,
+      0,
+    );
+    periodStartKey = formatLocalDateKey(firstMonth);
+
+    const monthMap = new Map<string, { sessions: number; focusSeconds: number }>();
+    for (const row of validRows) {
+      if (row.local_date > todayKey) continue;
+      const monthKey = row.local_date.slice(0, 7);
+      const prev = monthMap.get(monthKey) ?? { sessions: 0, focusSeconds: 0 };
+      monthMap.set(monthKey, {
+        sessions: prev.sessions + 1,
+        focusSeconds: prev.focusSeconds + sanitizeDurationSeconds(row.duration_seconds),
+      });
+    }
+
+    for (let m = 0; m < 12; m += 1) {
+      const d = new Date(
+        firstMonth.getFullYear(),
+        firstMonth.getMonth() + m,
+        1,
+        12,
+        0,
+        0,
+        0,
+      );
+      const year = d.getFullYear();
+      const monthStr = String(d.getMonth() + 1).padStart(2, '0');
+      const key = `${year}-${monthStr}`;
+      const shortMonth = capitalizeFirst(cleanFormattedDate(SHORT_MONTH_FMT, d));
+      const label =
+        d.getMonth() === 0 || m === 0
+          ? `${shortMonth} '${String(year).slice(-2)}`
+          : shortMonth;
+      const bucket = monthMap.get(key);
+      buckets.push({
+        key,
+        label,
+        fullLabel: capitalizeFirst(FULL_MONTH_FMT.format(d)),
+        focusSeconds: bucket?.focusSeconds ?? 0,
+        cumulativeSeconds: 0,
+        sessions: bucket?.sessions ?? 0,
+        isCurrentPeriod: m === 11,
+      });
+    }
+  } else {
+    const currentYear = today.getFullYear();
+    let minYear = currentYear - 2;
+    const yearMap = new Map<string, { sessions: number; focusSeconds: number }>();
+
+    for (const row of validRows) {
+      if (row.local_date > todayKey) continue;
+      const d = parseLocalDateKey(row.local_date);
+      if (!d) continue;
+      const year = d.getFullYear();
+      if (year < minYear) minYear = year;
+      const yearKey = String(year);
+      const prev = yearMap.get(yearKey) ?? { sessions: 0, focusSeconds: 0 };
+      yearMap.set(yearKey, {
+        sessions: prev.sessions + 1,
+        focusSeconds: prev.focusSeconds + sanitizeDurationSeconds(row.duration_seconds),
+      });
+    }
+
+    periodStartKey = `${minYear}-01-01`;
+    for (let y = minYear; y <= currentYear; y += 1) {
+      const key = String(y);
+      const bucket = yearMap.get(key);
+      buckets.push({
+        key,
+        label: key,
+        fullLabel: `Año ${key}`,
+        focusSeconds: bucket?.focusSeconds ?? 0,
+        cumulativeSeconds: 0,
+        sessions: bucket?.sessions ?? 0,
+        isCurrentPeriod: y === currentYear,
+      });
+    }
+  }
+
+  let cumulativeSeconds = 0;
+  let periodSessions = 0;
+  let activeCount = 0;
+  let bestBucket: StudyEvolutionBucket | null = null;
+
+  for (const bucket of buckets) {
+    cumulativeSeconds += bucket.focusSeconds;
+    bucket.cumulativeSeconds = cumulativeSeconds;
+    periodSessions += bucket.sessions;
+    if (bucket.focusSeconds > 0) {
+      activeCount += 1;
+      if (!bestBucket || bucket.focusSeconds > bestBucket.focusSeconds) {
+        bestBucket = bucket;
+      }
+    }
+  }
+
+  const periodTotalSeconds = cumulativeSeconds;
+  const averageBucketSeconds =
+    buckets.length > 0 ? Math.round(periodTotalSeconds / buckets.length) : 0;
+  const averageActiveBucketSeconds =
+    activeCount > 0 ? Math.round(periodTotalSeconds / activeCount) : 0;
+
+  // Per-book breakdown for the selected granularity period
+  const bookMap = new Map<
+    string,
+    {
+      itemId: string | null;
+      title: string;
+      author: string;
+      focusSeconds: number;
+      sessions: number;
+    }
+  >();
+
+  for (const row of validRows) {
+    if (row.local_date < periodStartKey || row.local_date > todayKey) {
+      continue;
+    }
+    const duration = sanitizeDurationSeconds(row.duration_seconds);
+    const mapKey = row.item_id ?? '__free__';
+    const existing = bookMap.get(mapKey) ?? {
+      itemId: row.item_id ?? null,
+      title: row.item_id ? row.item_title || 'Recurso eliminado' : 'Estudio libre',
+      author: row.item_id ? (row.item_author ?? '') : '',
+      focusSeconds: 0,
+      sessions: 0,
+    };
+    bookMap.set(mapKey, {
+      ...existing,
+      focusSeconds: existing.focusSeconds + duration,
+      sessions: existing.sessions + 1,
+    });
+  }
+
+  const sortedBooks = Array.from(bookMap.values()).sort((a, b) => {
+    if (b.focusSeconds !== a.focusSeconds) return b.focusSeconds - a.focusSeconds;
+    if (b.sessions !== a.sessions) return b.sessions - a.sessions;
+    return a.title.localeCompare(b.title, 'es');
+  });
+
+  const breakdownTotalSeconds = sortedBooks.reduce(
+    (sum, entry) => sum + entry.focusSeconds,
+    0,
+  );
+
+  const visibleBooks = sortedBooks.slice(0, 6);
+  if (sortedBooks.length > 6) {
+    const rest = sortedBooks.slice(6);
+    visibleBooks.push({
+      itemId: null,
+      title: 'Otros recursos',
+      author: '',
+      focusSeconds: rest.reduce((sum, entry) => sum + entry.focusSeconds, 0),
+      sessions: rest.reduce((sum, entry) => sum + entry.sessions, 0),
+    });
+  }
+
+  const bookBreakdown: StudyEvolutionBookBreakdown[] = visibleBooks.map((entry) => ({
+    ...entry,
+    sharePercent:
+      breakdownTotalSeconds > 0
+        ? Math.round((entry.focusSeconds / breakdownTotalSeconds) * 1000) / 10
+        : 0,
+  }));
+
+  return {
+    granularity,
+    buckets,
+    periodTotalSeconds,
+    periodSessions,
+    averageBucketSeconds,
+    averageActiveBucketSeconds,
+    bestBucket,
+    summaries,
+    bookBreakdown,
+  };
+}
+
+/**
+ * Fetches Pomodoro focus sessions from SQLite and aggregates evolution stats.
+ */
+export async function getStudyEvolutionStats(
+  granularity: StudyEvolutionGranularity,
+): Promise<StudyEvolutionStats> {
+  const rows = await invokeDb<StudySessionWithItemRow[]>('db_list_focus_sessions');
+  return computeStudyEvolutionStats(rows, granularity);
 }

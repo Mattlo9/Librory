@@ -44,6 +44,7 @@ interface ReaderHighlightsPanelProps {
   onDraftChange: (draft: ReaderHighlightDraft | null) => void;
   onJumpToPage: (page: number) => void;
   onClose: () => void;
+  embedded?: boolean;
 }
 
 export function ReaderHighlightsPanel({
@@ -58,6 +59,7 @@ export function ReaderHighlightsPanel({
   onDraftChange,
   onJumpToPage,
   onClose,
+  embedded = false,
 }: ReaderHighlightsPanelProps) {
   const createHighlight = useCreateHighlight();
   const updateHighlight = useUpdateHighlight();
@@ -115,26 +117,45 @@ export function ReaderHighlightsPanel({
     }
   }
 
-  return (
-    <aside
-      aria-label="Subrayados y notas del documento"
-      className="flex h-full w-[340px] shrink-0 flex-col border-l border-border bg-card lg:w-[376px]"
-    >
-      <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
-        <div className="flex items-center gap-2">
-          <Highlighter className="size-4 text-accent-brand" />
-          <h2 className="text-sm font-semibold tracking-tight text-foreground">
-            Subrayados
-          </h2>
-          <Badge
-            variant="secondary"
-            className="h-5 rounded-md px-1.5 font-mono text-[10.5px] font-normal tabular-nums"
+  const content = (
+    <>
+      {embedded ? (
+        <div className="flex items-center gap-2 border-b border-border/70 px-3.5 py-2">
+          <div
+            role="tablist"
+            aria-label="Filtrar subrayados del documento"
+            className="grid min-w-0 flex-1 grid-cols-2 rounded-lg border border-border bg-background/60 p-0.5"
           >
-            {highlights.length}
-          </Badge>
-        </div>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={scope === 'all'}
+              onClick={() => setScope('all')}
+              className={cn(
+                'truncate rounded-md px-1.5 py-1 text-xs font-medium transition-colors',
+                scope === 'all'
+                  ? 'bg-secondary text-foreground'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              Todo el libro ({highlights.length})
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={scope === 'page'}
+              onClick={() => setScope('page')}
+              className={cn(
+                'truncate rounded-md px-1.5 py-1 text-xs font-medium transition-colors',
+                scope === 'page'
+                  ? 'bg-secondary text-foreground'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {unitLabel === 'cap.' ? `Cap. ${currentPage}` : `Pág. ${currentPage}`} ({currentPageCount})
+            </button>
+          </div>
 
-        <div className="flex items-center gap-1">
           <Button
             type="button"
             variant="outline"
@@ -147,58 +168,95 @@ export function ReaderHighlightsPanel({
                 page_number: currentPage,
               });
             }}
+            className="shrink-0"
           >
             <Plus className="size-3" />
             Nuevo
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label="Cerrar panel de subrayados"
-            onClick={onClose}
-          >
-            <X className="size-3.5" />
-          </Button>
         </div>
-      </div>
+      ) : (
+        <>
+          <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+            <div className="flex items-center gap-2">
+              <Highlighter className="size-4 text-accent-brand" />
+              <h2 className="text-sm font-semibold tracking-tight text-foreground">
+                Subrayados
+              </h2>
+              <Badge
+                variant="secondary"
+                className="h-5 rounded-md px-1.5 font-mono text-[10.5px] font-normal tabular-nums"
+              >
+                {highlights.length}
+              </Badge>
+            </div>
 
-      <div className="border-b border-border/70 px-4 py-2">
-        <div
-          role="tablist"
-          aria-label="Filtrar subrayados del documento"
-          className="grid grid-cols-2 rounded-lg border border-border bg-background/60 p-0.5"
-        >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={scope === 'all'}
-            onClick={() => setScope('all')}
-            className={cn(
-              'rounded-md py-1 text-xs font-medium transition-colors',
-              scope === 'all'
-                ? 'bg-secondary text-foreground'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            Todo el libro ({highlights.length})
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={scope === 'page'}
-            onClick={() => setScope('page')}
-            className={cn(
-              'rounded-md py-1 text-xs font-medium transition-colors',
-              scope === 'page'
-                ? 'bg-secondary text-foreground'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {unitLabel === 'cap.' ? `Cap. ${currentPage}` : `Pág. ${currentPage}`} ({currentPageCount})
-          </button>
-        </div>
-      </div>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                onClick={() => {
+                  setEditingId(null);
+                  onDraftChange({
+                    quote_text: '',
+                    color: 'amber',
+                    page_number: currentPage,
+                  });
+                }}
+              >
+                <Plus className="size-3" />
+                Nuevo
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                aria-label="Cerrar panel de subrayados"
+                onClick={onClose}
+              >
+                <X className="size-3.5" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="border-b border-border/70 px-4 py-2">
+            <div
+              role="tablist"
+              aria-label="Filtrar subrayados del documento"
+              className="grid grid-cols-2 rounded-lg border border-border bg-background/60 p-0.5"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={scope === 'all'}
+                onClick={() => setScope('all')}
+                className={cn(
+                  'rounded-md py-1 text-xs font-medium transition-colors',
+                  scope === 'all'
+                    ? 'bg-secondary text-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                Todo el libro ({highlights.length})
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={scope === 'page'}
+                onClick={() => setScope('page')}
+                className={cn(
+                  'rounded-md py-1 text-xs font-medium transition-colors',
+                  scope === 'page'
+                    ? 'bg-secondary text-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {unitLabel === 'cap.' ? `Cap. ${currentPage}` : `Pág. ${currentPage}`} ({currentPageCount})
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       <ScrollArea className="min-h-0 flex-1">
         <div className="space-y-3 p-4">
@@ -372,6 +430,19 @@ export function ReaderHighlightsPanel({
           setHighlightToDelete(null);
         }}
       />
+    </>
+  );
+
+  if (embedded) {
+    return <div className="flex min-h-0 flex-1 flex-col">{content}</div>;
+  }
+
+  return (
+    <aside
+      aria-label="Subrayados y notas del documento"
+      className="flex h-full w-[340px] shrink-0 flex-col border-l border-border bg-card lg:w-[376px]"
+    >
+      {content}
     </aside>
   );
 }

@@ -3,6 +3,7 @@ import {
   BookOpen,
   Check,
   Pause,
+  Pencil,
   Play,
   RotateCcw,
   Settings2,
@@ -11,7 +12,7 @@ import {
   Volume2,
   VolumeX,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,14 +21,20 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { formatClock } from '@/features/pomodoro/lib/formatTime';
+import {
+  formatClock,
+  parsePomodoroDurationInput,
+} from '@/features/pomodoro/lib/formatTime';
 import {
   useCreateStudySession,
   usePomodoroBookOptions,
 } from '@/features/stats/hooks/useStudyStats';
 import { cn } from '@/lib/utils';
 import { isTauriRuntime } from '@/services/db';
-import { usePomodoroStore } from '@/store/pomodoroStore';
+import {
+  POMODORO_PHASE_MAX_MINUTES,
+  usePomodoroStore,
+} from '@/store/pomodoroStore';
 import { useUiStore } from '@/store/uiStore';
 import type { PomodoroPhase } from '@/types/domain';
 
@@ -46,6 +53,8 @@ const PRESETS = [
   { label: '50 / 10', focus: 50, short: 10, long: 20 },
   { label: '15 / 3', focus: 15, short: 3, long: 10 },
 ] as const;
+
+const FOCUS_QUICK_MINUTES = [15, 25, 45, 60] as const;
 
 interface DurationFieldProps {
   id: string;
@@ -112,6 +121,9 @@ function DurationField({
 export function PomodoroWidget({ variant = 'header' }: PomodoroWidgetProps) {
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [isEditingTime, setIsEditingTime] = useState(false);
+  const [timeDraft, setTimeDraft] = useState('');
+  const timeInputRef = useRef<HTMLInputElement | null>(null);
 
   const phase = usePomodoroStore((s) => s.phase);
   const status = usePomodoroStore((s) => s.status);
@@ -141,10 +153,45 @@ export function PomodoroWidget({ variant = 'header' }: PomodoroWidgetProps) {
   const saveAndFinishPartial = usePomodoroStore((s) => s.saveAndFinishPartial);
   const setLinkedBook = usePomodoroStore((s) => s.setLinkedBook);
   const applyPreset = usePomodoroStore((s) => s.applyPreset);
+  const setCustomPhaseDuration = usePomodoroStore(
+    (s) => s.setCustomPhaseDuration,
+  );
   const updateSettings = usePomodoroStore((s) => s.updateSettings);
   const getElapsedFocusSeconds = usePomodoroStore(
     (s) => s.getElapsedFocusSeconds,
   );
+
+  useEffect(() => {
+    if (status !== 'idle' || !open) {
+      setIsEditingTime(false);
+    }
+  }, [status, open, phase]);
+
+  const beginEditTime = () => {
+    if (status !== 'idle') return;
+    setTimeDraft(
+      remainingSeconds % 60 === 0
+        ? String(Math.floor(remainingSeconds / 60))
+        : formatClock(remainingSeconds),
+    );
+    setIsEditingTime(true);
+    window.requestAnimationFrame(() => {
+      timeInputRef.current?.focus();
+      timeInputRef.current?.select();
+    });
+  };
+
+  const commitEditTime = () => {
+    const parsed = parsePomodoroDurationInput(
+      timeDraft,
+      1,
+      POMODORO_PHASE_MAX_MINUTES[phase],
+    );
+    if (parsed) {
+      setCustomPhaseDuration(parsed.totalSeconds);
+    }
+    setIsEditingTime(false);
+  };
 
   const navigate = useUiStore((s) => s.navigate);
   const bookOptionsQuery = usePomodoroBookOptions(open);
@@ -259,7 +306,16 @@ export function PomodoroWidget({ variant = 'header' }: PomodoroWidgetProps) {
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent align="end" className="w-80 space-y-3.5 p-4">
+      <PopoverContent
+        align="end"
+        onEscapeKeyDown={(e) => {
+          if (isEditingTime) {
+            e.preventDefault();
+            setIsEditingTime(false);
+          }
+        }}
+        className="w-80 space-y-3.5 p-4"
+      >
         {/* Top bar: phases + sound + settings */}
         <div className="flex items-center justify-between gap-2">
           <div
@@ -350,9 +406,79 @@ export function PomodoroWidget({ variant = 'header' }: PomodoroWidgetProps) {
             </div>
           </div>
 
-          <div className="font-mono text-4xl font-semibold tracking-tight tabular-nums text-foreground">
-            {formatClock(remainingSeconds)}
-          </div>
+          {isEditingTime && status === 'idle' ? (
+            <div className="space-y-1 py-0.5">
+              <input
+                ref={timeInputRef}
+                type="text"
+                inputMode="numeric"
+                value={timeDraft}
+                aria-label="Escribir duración en minutos o mm:ss"
+                onChange={(e) => setTimeDraft(e.target.value)}
+                onBlur={commitEditTime}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    commitEditTime();
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsEditingTime(false);
+                  }
+                }}
+                className="mx-auto block w-40 rounded-md border border-ring/60 bg-background px-2 py-0.5 text-center font-mono text-4xl font-semibold tracking-tight tabular-nums text-foreground outline-none"
+              />
+              <p className="text-[10.5px] text-muted-foreground">
+                Minutos (1–{POMODORO_PHASE_MAX_MINUTES[phase]}) o mm:ss · Enter
+              </p>
+            </div>
+          ) : status === 'idle' ? (
+            <button
+              type="button"
+              onClick={beginEditTime}
+              title="Clic para escribir el tiempo (ej. 40 o 45:30)"
+              aria-label={`Editar tiempo del temporizador (${formatClock(remainingSeconds)})`}
+              className="group inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-0.5 font-mono text-4xl font-semibold tracking-tight tabular-nums text-foreground outline-none transition-colors hover:bg-secondary/70 focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span>{formatClock(remainingSeconds)}</span>
+              <Pencil className="size-3.5 text-muted-foreground/50 transition-colors group-hover:text-foreground" />
+            </button>
+          ) : (
+            <div className="font-mono text-4xl font-semibold tracking-tight tabular-nums text-foreground">
+              {formatClock(remainingSeconds)}
+            </div>
+          )}
+
+          {phase === 'focus' && status === 'idle' ? (
+            <div
+              role="group"
+              aria-label="Duraciones rápidas de estudio"
+              className="flex items-center justify-center gap-1.5 pt-0.5"
+            >
+              {FOCUS_QUICK_MINUTES.map((mins) => {
+                const active = remainingSeconds === mins * 60;
+                return (
+                  <button
+                    key={mins}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => {
+                      setIsEditingTime(false);
+                      setCustomPhaseDuration(mins * 60);
+                    }}
+                    className={cn(
+                      'rounded-md border px-2 py-0.5 font-mono text-[10.5px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      active
+                        ? 'border-emerald-500/45 bg-emerald-500/15 font-medium text-emerald-700 dark:text-emerald-300'
+                        : 'border-border/70 bg-background/60 text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {mins}m
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
 
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
             <div
@@ -523,7 +649,7 @@ export function PomodoroWidget({ variant = 'header' }: PomodoroWidgetProps) {
                 label="Enfoque"
                 value={focusMinutes}
                 min={1}
-                max={180}
+                max={POMODORO_PHASE_MAX_MINUTES.focus}
                 onCommit={(v) => updateSettings({ focusMinutes: v })}
               />
               <DurationField

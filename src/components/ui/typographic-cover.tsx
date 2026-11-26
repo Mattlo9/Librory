@@ -37,6 +37,7 @@ function hashSeed(input: string): number {
   return hash >>> 0;
 }
 
+const COMPACT_TITLE_SIZE = 'clamp(7.5px, 16cqw, 10px)';
 const TITLE_SIZE = 'clamp(9px, 8.2cqw, 20px)';
 const COURSE_TITLE_SIZE = 'clamp(8.5px, 7.2cqw, 18px)';
 const UNSORTED_TITLE_SIZE = 'clamp(8.5px, 7.6cqw, 19px)';
@@ -87,8 +88,8 @@ export const TypographicCover = memo(function TypographicCover({
             </div>
           ) : null}
           <p
-            className="line-clamp-4 font-serif font-medium leading-[1.15] tracking-tight text-[#111114]"
-            style={{ fontSize: compact ? 6.5 : TITLE_SIZE }}
+            className="line-clamp-3 font-serif font-medium leading-[1.15] tracking-tight text-[#111114]"
+            style={{ fontSize: compact ? COMPACT_TITLE_SIZE : TITLE_SIZE }}
           >
             {title}
           </p>
@@ -153,7 +154,7 @@ export const TypographicCover = memo(function TypographicCover({
         >
           <p
             className="line-clamp-3 font-sans font-semibold leading-tight tracking-tight"
-            style={{ fontSize: compact ? 6 : COURSE_TITLE_SIZE }}
+            style={{ fontSize: compact ? COMPACT_TITLE_SIZE : COURSE_TITLE_SIZE }}
           >
             {title}
           </p>
@@ -189,8 +190,8 @@ export const TypographicCover = memo(function TypographicCover({
         </div>
 
         <p
-          className="my-auto line-clamp-4 font-serif font-medium leading-[1.16] tracking-tight text-zinc-100"
-          style={{ fontSize: compact ? 6.5 : TITLE_SIZE }}
+          className="my-auto line-clamp-3 font-serif font-medium leading-[1.16] tracking-tight text-zinc-100"
+          style={{ fontSize: compact ? COMPACT_TITLE_SIZE : TITLE_SIZE }}
         >
           {title}
         </p>
@@ -223,8 +224,8 @@ export const TypographicCover = memo(function TypographicCover({
         ) : null}
 
         <p
-          className="line-clamp-4 font-sans font-medium leading-snug tracking-tight text-zinc-100"
-          style={{ fontSize: compact ? 6 : UNSORTED_TITLE_SIZE }}
+          className="line-clamp-3 font-sans font-medium leading-snug tracking-tight text-zinc-100"
+          style={{ fontSize: compact ? COMPACT_TITLE_SIZE : UNSORTED_TITLE_SIZE }}
         >
           {title}
         </p>
@@ -272,8 +273,8 @@ export const TypographicCover = memo(function TypographicCover({
 
       <div className="my-auto py-1">
         <p
-          className="line-clamp-4 font-serif font-medium leading-[1.15] tracking-tight"
-          style={{ fontSize: compact ? 6.5 : TITLE_SIZE }}
+          className="line-clamp-3 font-serif font-medium leading-[1.15] tracking-tight"
+          style={{ fontSize: compact ? COMPACT_TITLE_SIZE : TITLE_SIZE }}
         >
           {title}
         </p>

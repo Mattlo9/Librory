@@ -1,5 +1,5 @@
 import { Check, Star } from 'lucide-react';
-import { memo, type MouseEvent } from 'react';
+import { memo, useEffect, useRef, type MouseEvent } from 'react';
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -13,14 +13,17 @@ import {
 import { useAssetUrl } from '@/features/library/hooks/useAssetUrl';
 import { isItemReadableLocally } from '@/lib/highlights';
 import { cn } from '@/lib/utils';
-import type { LibraryItemWithRelations } from '@/types/domain';
+import type { CoverFitMode, LibraryItemWithRelations } from '@/types/domain';
 
 interface BookCardProps {
   item: LibraryItemWithRelations;
   actions: BookItemActions;
+  coverFit?: CoverFitMode;
   selected?: boolean;
   selectionActive?: boolean;
 }
+
+const SINGLE_CLICK_DELAY_MS = 220;
 
 const COVER_BOX_STYLE = {
   height: 'calc(var(--cover-w, 158px) * 1.5 + 16px)',
@@ -29,6 +32,7 @@ const COVER_BOX_STYLE = {
 export const BookCard = memo(function BookCard({
   item,
   actions,
+  coverFit = 'contain',
   selected = false,
   selectionActive = false,
 }: BookCardProps) {
@@ -39,22 +43,63 @@ export const BookCard = memo(function BookCard({
     item.page_count > 0 && item.current_page > 0
       ? Math.min(100, Math.round((item.current_page / item.page_count) * 100))
       : 0;
+  const clickTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (clickTimerRef.current !== null) {
+        window.clearTimeout(clickTimerRef.current);
+        clickTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const clearPendingClick = () => {
+    if (clickTimerRef.current !== null) {
+      window.clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+  };
 
   const handleOpenDetails = (event: MouseEvent) => {
     if (
       (selectionActive || event.ctrlKey || event.metaKey || event.shiftKey) &&
       actions.onToggleSelect
     ) {
+      clearPendingClick();
       event.preventDefault();
       actions.onToggleSelect(item.id, event.shiftKey);
       return;
     }
-    actions.onSelect(item.id);
+
+    if (event.detail === 0) {
+      clearPendingClick();
+      actions.onSelect(item.id);
+      return;
+    }
+
+    if (event.detail >= 2) {
+      clearPendingClick();
+      return;
+    }
+
+    clearPendingClick();
+    clickTimerRef.current = window.setTimeout(() => {
+      clickTimerRef.current = null;
+      actions.onSelect(item.id);
+    }, SINGLE_CLICK_DELAY_MS);
   };
-  const handleDoubleClick =
-    !selectionActive && canReadLocally && actions.onOpenReader
-      ? () => actions.onOpenReader?.(item.id)
-      : undefined;
+
+  const handleDoubleClick = () => {
+    clearPendingClick();
+    if (selectionActive) return;
+    if (canReadLocally && actions.onOpenReader) {
+      actions.onOpenReader(item.id);
+    } else {
+      actions.onSelect(item.id);
+    }
+  };
+
   const hoverHint = selectionActive
     ? 'Clic para seleccionar · Shift+Clic para rango'
     : canReadLocally
@@ -74,7 +119,7 @@ export const BookCard = memo(function BookCard({
                 type="button"
                 aria-label={item.title}
                 onClick={handleOpenDetails}
-                onDoubleClick={handleDoubleClick}
+                onDoubleClick={selectionActive ? undefined : handleDoubleClick}
                 title={hoverHint}
                 className="block w-full rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               >
@@ -85,22 +130,25 @@ export const BookCard = memo(function BookCard({
                   type={item.type}
                   fileFormat={item.file_format}
                   assetUrl={assetUrl}
+                  fit={coverFit}
+                  maxHeight="calc(var(--cover-w, 158px) * 1.5)"
                   className={cn(
                     'transition-shadow duration-200 group-hover:ring-accent-brand/45 group-focus-within:ring-accent-brand/60',
                     selected && 'ring-2 ring-accent-brand',
                   )}
-                />
-                {readingPercent > 0 ? (
-                  <div
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] overflow-hidden rounded-b-md bg-black/55"
-                  >
+                >
+                  {readingPercent > 0 ? (
                     <div
-                      className="h-full bg-accent-brand"
-                      style={{ width: `${readingPercent}%` }}
-                    />
-                  </div>
-                ) : null}
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] overflow-hidden bg-black/55"
+                    >
+                      <div
+                        className="h-full bg-accent-brand"
+                        style={{ width: `${readingPercent}%` }}
+                      />
+                    </div>
+                  ) : null}
+                </CoverImage>
               </button>
 
               {actions.onToggleSelect ? (
@@ -163,7 +211,7 @@ export const BookCard = memo(function BookCard({
 
           <div
             onClick={handleOpenDetails}
-            onDoubleClick={handleDoubleClick}
+            onDoubleClick={selectionActive ? undefined : handleDoubleClick}
             title={hoverHint}
             className="cursor-pointer space-y-0.5 pt-1"
           >

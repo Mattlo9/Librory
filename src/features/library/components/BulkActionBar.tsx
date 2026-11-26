@@ -2,6 +2,7 @@ import {
   Check,
   CircleDot,
   FolderInput,
+  ImageDown,
   Trash2,
   X,
 } from 'lucide-react';
@@ -22,9 +23,11 @@ import {
   useBulkDeleteItems,
   useBulkRemoveItemsFromShelf,
   useBulkUpdateItemsStatus,
+  useRegenerateItemCover,
 } from '@/features/library/hooks/useLibraryData';
 import { getShelfBreadcrumb } from '@/lib/shelfTree';
 import { ITEM_STATUS_LABELS } from '@/lib/text';
+import { isSafeStoredBookPath } from '@/lib/validation';
 import {
   ITEM_STATUSES,
   type LibraryItemWithRelations,
@@ -52,11 +55,20 @@ export function BulkActionBar({
   const bulkAssignShelf = useBulkAssignItemsToShelf();
   const bulkRemoveShelf = useBulkRemoveItemsFromShelf();
   const bulkDelete = useBulkDeleteItems();
+  const regenerateCover = useRegenerateItemCover();
 
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [regenProgress, setRegenProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
 
   const selectedIds = useMemo(
     () => selectedItems.map((item) => item.id),
+    [selectedItems],
+  );
+  const regeneratableItems = useMemo(
+    () => selectedItems.filter((item) => isSafeStoredBookPath(item.file_path)),
     [selectedItems],
   );
 
@@ -78,7 +90,28 @@ export function BulkActionBar({
     bulkUpdateStatus.isPending ||
     bulkAssignShelf.isPending ||
     bulkRemoveShelf.isPending ||
-    bulkDelete.isPending;
+    bulkDelete.isPending ||
+    regenProgress !== null;
+
+  async function handleBulkRegenerateCovers() {
+    if (regeneratableItems.length === 0 || regenProgress !== null) return;
+    const total = regeneratableItems.length;
+    setRegenProgress({ current: 0, total });
+    try {
+      for (let i = 0; i < total; i += 1) {
+        const entry = regeneratableItems[i];
+        if (!entry) continue;
+        setRegenProgress({ current: i + 1, total });
+        try {
+          await regenerateCover.mutateAsync(entry);
+        } catch (err) {
+          console.error('Error regenerando portada:', entry.title, err);
+        }
+      }
+    } finally {
+      setRegenProgress(null);
+    }
+  }
 
   if (selectedItems.length === 0) {
     return null;
@@ -203,6 +236,25 @@ export function BulkActionBar({
             )}
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {regeneratableItems.length > 0 ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            disabled={isBusy}
+            title="Regenerar portadas seleccionadas en mayor nitidez (640px WebP)"
+            onClick={() => void handleBulkRegenerateCovers()}
+            className="gap-1.5"
+          >
+            <ImageDown className="size-3.5" />
+            <span>
+              {regenProgress
+                ? `Optimizando ${regenProgress.current}/${regenProgress.total}...`
+                : 'Optimizar portadas'}
+            </span>
+          </Button>
+        ) : null}
 
         <Button
           type="button"

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type {
+  CoverFitMode,
   ItemStatus,
   ItemType,
   NavigationSection,
@@ -41,6 +42,8 @@ interface UiState {
   activeTypeFilter: ItemType | 'all';
   activeStatusFilter: ItemStatus | 'all';
   coverSize: number;
+  listCoverSize: number;
+  coverFit: CoverFitMode;
   viewMode: ViewMode;
   sortBy: SortOption;
   groupByShelf: boolean;
@@ -61,6 +64,8 @@ interface UiState {
   setActiveTypeFilter: (type: ItemType | 'all') => void;
   setActiveStatusFilter: (status: ItemStatus | 'all') => void;
   setCoverSize: (size: number) => void;
+  setListCoverSize: (size: number) => void;
+  setCoverFit: (fit: CoverFitMode) => void;
   setViewMode: (mode: ViewMode) => void;
   setSortBy: (sort: SortOption) => void;
   setGroupByShelf: (grouped: boolean) => void;
@@ -89,6 +94,8 @@ export const useUiStore = create<UiState>()(
       activeTypeFilter: 'all',
       activeStatusFilter: 'all',
       coverSize: 158,
+      listCoverSize: 56,
+      coverFit: 'contain',
       viewMode: 'grid',
       sortBy: 'created_desc',
       groupByShelf: true,
@@ -188,6 +195,15 @@ export const useUiStore = create<UiState>()(
             ? Math.min(240, Math.max(110, Math.round(coverSize)))
             : state.coverSize,
         })),
+
+      setListCoverSize: (listCoverSize) =>
+        set((state) => ({
+          listCoverSize: Number.isFinite(listCoverSize)
+            ? Math.min(104, Math.max(36, Math.round(listCoverSize)))
+            : state.listCoverSize,
+        })),
+
+      setCoverFit: (coverFit) => set({ coverFit }),
 
       setViewMode: (viewMode) => set({ viewMode }),
 
@@ -313,6 +329,8 @@ export const useUiStore = create<UiState>()(
       version: 1,
       partialize: (state) => ({
         coverSize: state.coverSize,
+        listCoverSize: state.listCoverSize,
+        coverFit: state.coverFit,
         viewMode: state.viewMode,
         sortBy: state.sortBy,
         groupByShelf: state.groupByShelf,
@@ -330,6 +348,15 @@ export const useUiStore = create<UiState>()(
           typeof raw.coverSize === 'number' && Number.isFinite(raw.coverSize)
             ? Math.min(240, Math.max(110, Math.round(raw.coverSize)))
             : currentState.coverSize;
+        const listCoverSize =
+          typeof raw.listCoverSize === 'number' &&
+          Number.isFinite(raw.listCoverSize)
+            ? Math.min(104, Math.max(36, Math.round(raw.listCoverSize)))
+            : currentState.listCoverSize;
+        const coverFit: CoverFitMode =
+          raw.coverFit === 'contain' || raw.coverFit === 'cover'
+            ? raw.coverFit
+            : currentState.coverFit;
         const viewMode: ViewMode =
           raw.viewMode === 'grid' || raw.viewMode === 'list'
             ? raw.viewMode
@@ -386,6 +413,8 @@ export const useUiStore = create<UiState>()(
         return {
           ...currentState,
           coverSize,
+          listCoverSize,
+          coverFit,
           viewMode,
           sortBy,
           groupByShelf,

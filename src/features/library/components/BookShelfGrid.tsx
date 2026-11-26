@@ -36,6 +36,7 @@ export const BookShelfGrid = memo(function BookShelfGrid({
   onSelectShelf,
 }: BookShelfGridProps) {
   const coverSize = useUiStore((s) => s.coverSize);
+  const coverFit = useUiStore((s) => s.coverFit);
   const isGrouped = shouldGroupByShelf(section, groupByShelf, shelves);
 
   const groups = useMemo(() => {
@@ -120,6 +121,7 @@ export const BookShelfGrid = memo(function BookShelfGrid({
                 key={`${group.key}:${item.id}`}
                 item={item}
                 actions={bookActions}
+                coverFit={coverFit}
                 selected={selectedIdsSet.has(item.id)}
                 selectionActive={selectionActive}
               />

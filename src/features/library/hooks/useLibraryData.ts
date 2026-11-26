@@ -48,6 +48,7 @@ import type {
   SaveReadingProgressInput,
   ShelfWithCount,
   SortOption,
+  StudyEvolutionGranularity,
   StudyStatsRange,
   UpdateHighlightInput,
   UpdateItemInput,
@@ -94,6 +95,8 @@ export const libraryKeys = {
   studyStatsRoot: ['library', 'study-stats'] as const,
   studyStats: (range: StudyStatsRange) =>
     ['library', 'study-stats', range] as const,
+  studyEvolution: (granularity: StudyEvolutionGranularity) =>
+    ['library', 'study-stats', 'evolution', granularity] as const,
   pomodoroBookOptions: ['library', 'pomodoro-books'] as const,
   hasSample: ['library', 'has-sample'] as const,
 };

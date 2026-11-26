@@ -1,5 +1,10 @@
 import { strFromU8 } from 'fflate';
-import { canvasToWebpBytes, COVER_TARGET_WIDTH } from '@/lib/imageEncoding';
+import {
+  canvasToWebpBytes,
+  COVER_MAX_HEIGHT,
+  COVER_TARGET_WIDTH,
+  drawImageHighQuality,
+} from '@/lib/imageEncoding';
 import { normalizeZipLookupKey, safeUnzipEpub } from '@/lib/safeZip';
 import { cleanMetadataString } from '@/lib/validation';
 import type { ExtractedDocumentMeta } from '@/types/domain';
@@ -7,7 +12,6 @@ import type { ExtractedDocumentMeta } from '@/types/domain';
 const MAX_META_XML_BYTES = 4 * 1024 * 1024; // 4 MiB for container.xml / OPF
 const MAX_COVER_IMAGE_BYTES = 15 * 1024 * 1024; // 15 MiB compressed cover cap
 const MAX_COVER_PIXELS = 25_000_000; // 25 megapixels max decoded bitmap
-const MAX_COVER_HEIGHT = 960;
 
 function resolveOpfHref(opfPath: string, href: string): string {
   let cleanHref = (href.split('#')[0] ?? href).split('?')[0] ?? href;
@@ -104,7 +108,7 @@ async function encodeImageBytesToWebp(imageBytes: Uint8Array): Promise<Uint8Arra
 
   const blob = new Blob([imageBytes.slice()]);
   let bitmap: ImageBitmap | null = null;
-  const canvas = document.createElement('canvas');
+  let canvas: HTMLCanvasElement | null = null;
 
   try {
     bitmap = await createImageBitmap(blob);
@@ -119,22 +123,35 @@ async function encodeImageBytesToWebp(imageBytes: Uint8Array): Promise<Uint8Arra
     const scale = Math.min(
       1,
       COVER_TARGET_WIDTH / bitmap.width,
-      MAX_COVER_HEIGHT / bitmap.height,
+      COVER_MAX_HEIGHT / bitmap.height,
     );
-    canvas.width = Math.max(1, Math.min(COVER_TARGET_WIDTH, Math.round(bitmap.width * scale)));
-    canvas.height = Math.max(1, Math.min(MAX_COVER_HEIGHT, Math.round(bitmap.height * scale)));
+    const targetWidth = Math.max(
+      1,
+      Math.min(COVER_TARGET_WIDTH, Math.round(bitmap.width * scale)),
+    );
+    const targetHeight = Math.max(
+      1,
+      Math.min(COVER_MAX_HEIGHT, Math.round(bitmap.height * scale)),
+    );
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return null;
+    canvas = drawImageHighQuality(
+      bitmap,
+      bitmap.width,
+      bitmap.height,
+      targetWidth,
+      targetHeight,
+    );
+    if (!canvas) return null;
 
-    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     return await canvasToWebpBytes(canvas);
   } catch {
     return null;
   } finally {
     bitmap?.close();
-    canvas.width = 0;
-    canvas.height = 0;
+    if (canvas) {
+      canvas.width = 0;
+      canvas.height = 0;
+    }
   }
 }
 

@@ -9,6 +9,7 @@ import {
   List,
   MessageSquarePlus,
   Minus,
+  NotebookPen,
   Plus,
   Type,
   X,
@@ -44,10 +45,13 @@ import {
   useOpenBookExternally,
   useSaveReadingProgress,
 } from '@/features/library/hooks/useLibraryData';
+import { useNotesList } from '@/features/notes/hooks/useNotes';
+import type { ReaderHighlightDraft } from '@/features/reader/components/ReaderHighlightsPanel';
+import type { ReaderNoteQuoteInsert } from '@/features/reader/components/ReaderNotesSection';
 import {
-  ReaderHighlightsPanel,
-  type ReaderHighlightDraft,
-} from '@/features/reader/components/ReaderHighlightsPanel';
+  ReaderSidePanel,
+  type ReaderSidePanelTab,
+} from '@/features/reader/components/ReaderSidePanel';
 import { useStoredFileBytes } from '@/features/reader/hooks/useStoredFileBytes';
 import {
   HIGHLIGHT_COLOR_LABELS,
@@ -220,6 +224,7 @@ export function EpubReaderView({
 }: EpubReaderViewProps) {
   const detailQuery = useItemDetail(itemId);
   const highlightsQuery = useItemHighlights(itemId);
+  const notesQuery = useNotesList(true);
   const saveReadingProgress = useSaveReadingProgress();
   const createHighlight = useCreateHighlight();
   const openBookExternally = useOpenBookExternally();
@@ -235,6 +240,10 @@ export function EpubReaderView({
     isReadableEpub && item ? item.file_path : null,
   );
   const highlights = highlightsQuery.data ?? [];
+  const bookNotesCount = useMemo(
+    () => (notesQuery.data ?? []).filter((n) => n.item_id === itemId).length,
+    [notesQuery.data, itemId],
+  );
 
   const [prefs, setPrefs] = useState<EpubReaderPrefs>(loadPrefs);
   const [book, setBook] = useState<ParsedEpubBook | null>(null);
@@ -247,9 +256,12 @@ export function EpubReaderView({
     ),
   );
   const [tocOpen, setTocOpen] = useState(false);
-  const [highlightsOpen, setHighlightsOpen] = useState(false);
+  const [sidePanelTab, setSidePanelTab] =
+    useState<ReaderSidePanelTab | null>(null);
   const [composerDraft, setComposerDraft] =
     useState<ReaderHighlightDraft | null>(null);
+  const [pendingNoteQuote, setPendingNoteQuote] =
+    useState<ReaderNoteQuoteInsert | null>(null);
   const [selectionPrompt, setSelectionPrompt] = useState<{
     quote: string;
     pageNumber: number;
@@ -544,7 +556,15 @@ export function EpubReaderView({
 
       if (event.key.toLowerCase() === 'h') {
         event.preventDefault();
-        setHighlightsOpen((prev) => !prev);
+        setSidePanelTab((prev) =>
+          prev === 'highlights' ? null : 'highlights',
+        );
+        return;
+      }
+
+      if (event.key.toLowerCase() === 'n') {
+        event.preventDefault();
+        setSidePanelTab((prev) => (prev === 'notes' ? null : 'notes'));
         return;
       }
 
@@ -694,7 +714,18 @@ export function EpubReaderView({
       color,
       page_number: pageNumber,
     });
-    setHighlightsOpen(true);
+    setSidePanelTab('highlights');
+  }
+
+  function handleSendSelectionToNote(quote: string, pageNumber: number) {
+    setSelectionPrompt(null);
+    window.getSelection()?.removeAllRanges();
+    setPendingNoteQuote({
+      id: Date.now(),
+      quote,
+      pageNumber,
+    });
+    setSidePanelTab('notes');
   }
 
   if (detailQuery.isLoading) {
@@ -984,10 +1015,36 @@ export function EpubReaderView({
 
           <Button
             type="button"
-            variant={highlightsOpen ? 'secondary' : 'outline'}
+            variant={sidePanelTab === 'notes' ? 'secondary' : 'outline'}
             size="xs"
-            aria-pressed={highlightsOpen}
-            onClick={() => setHighlightsOpen((prev) => !prev)}
+            aria-pressed={sidePanelTab === 'notes'}
+            title="Notas del libro (N)"
+            onClick={() =>
+              setSidePanelTab((prev) => (prev === 'notes' ? null : 'notes'))
+            }
+            className="gap-1.5"
+          >
+            <NotebookPen className="size-3.5 text-accent-brand" />
+            <span className="hidden sm:inline">Notas</span>
+            <Badge
+              variant="secondary"
+              className="h-4 rounded px-1 font-mono text-[10px] tabular-nums"
+            >
+              {bookNotesCount}
+            </Badge>
+          </Button>
+
+          <Button
+            type="button"
+            variant={sidePanelTab === 'highlights' ? 'secondary' : 'outline'}
+            size="xs"
+            aria-pressed={sidePanelTab === 'highlights'}
+            title="Subrayados (H)"
+            onClick={() =>
+              setSidePanelTab((prev) =>
+                prev === 'highlights' ? null : 'highlights',
+              )
+            }
             className="gap-1.5"
           >
             <Highlighter className="size-3.5 text-accent-brand" />
@@ -1201,6 +1258,7 @@ export function EpubReaderView({
 
                 <button
                   type="button"
+                  title="Guardar subrayado con comentario"
                   onClick={() =>
                     handleHighlightWithNote(
                       selectionPrompt.quote,
@@ -1212,6 +1270,21 @@ export function EpubReaderView({
                 >
                   <MessageSquarePlus className="size-3" />
                   <span>+ Nota</span>
+                </button>
+
+                <button
+                  type="button"
+                  title="Enviar cita a una nota Markdown del libro"
+                  onClick={() =>
+                    handleSendSelectionToNote(
+                      selectionPrompt.quote,
+                      selectionPrompt.pageNumber,
+                    )
+                  }
+                  className="inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-0.5 text-[11px] font-medium text-foreground transition-colors hover:bg-accent-brand hover:text-primary-foreground"
+                >
+                  <NotebookPen className="size-3" />
+                  <span>Enviar a nota</span>
                 </button>
 
                 <button
@@ -1236,11 +1309,11 @@ export function EpubReaderView({
               >
                 <Highlighter className="size-3.5 text-accent-brand" />
                 <span>{quickToast}</span>
-                {!highlightsOpen ? (
+                {!sidePanelTab ? (
                   <button
                     type="button"
                     onClick={() => {
-                      setHighlightsOpen(true);
+                      setSidePanelTab('highlights');
                       setQuickToast(null);
                     }}
                     className="font-medium text-accent-brand hover:underline"
@@ -1253,8 +1326,10 @@ export function EpubReaderView({
           </div>
         ) : null}
 
-        {highlightsOpen ? (
-          <ReaderHighlightsPanel
+        {sidePanelTab ? (
+          <ReaderSidePanel
+            activeTab={sidePanelTab}
+            onTabChange={setSidePanelTab}
             itemId={item.id}
             itemTitle={item.title}
             itemAuthor={item.author}
@@ -1262,10 +1337,13 @@ export function EpubReaderView({
             numPages={totalChapters}
             unitLabel="cap."
             highlights={highlights}
+            notesCount={bookNotesCount}
             draft={composerDraft}
             onDraftChange={setComposerDraft}
             onJumpToPage={handleJumpFromHighlight}
-            onClose={() => setHighlightsOpen(false)}
+            pendingQuoteInsert={pendingNoteQuote}
+            onConsumeQuoteInsert={() => setPendingNoteQuote(null)}
+            onClose={() => setSidePanelTab(null)}
           />
         ) : null}
       </div>
